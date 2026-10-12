@@ -1,0 +1,25 @@
+#!/usr/bin/env php
+<?php
+/**
+ * The deploy gate: is the preview going to be protected? (SPEC.md §9.2)
+ *
+ *   vendor/bin/sudare-check                  # project root = current directory
+ *   vendor/bin/sudare-check /path/to/project
+ *   vendor/bin/sudare-check site/config/sudare.php
+ *   vendor/bin/sudare-check --allow-off      # public deploy: "not protected" is fine
+ *
+ * Reads the same sources as Sudare itself (sudare.php, legacy credentials.php,
+ * SUDARE_* variables) and reports the state without printing any secret.
+ *
+ * Exit codes: 0 protected and valid (or off with --allow-off), 1 not protected
+ * (no configuration, or active => false), 2 broken (every request would be
+ * 503), 3 wrong usage. Written by the architect (SPEC.md §9).
+ */
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    exit;
+}
+
+require_once dirname(__DIR__) . '/bootstrap.php';
+
+exit(Sudare\Cli::check($argv, STDOUT, STDERR, getenv(), (string) getcwd()));

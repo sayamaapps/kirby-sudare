@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    # Fork guard: a pull request from a fork runs with the fork's code but in
+    # this repository's context. This workflow needs no secrets, yet the guard
+    # keeps the setup identical across the sayamaapps plugin family.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring
+          coverage: none
+
+      - name: Install dev dependencies (Kirby as fixture)
+        run: composer install --no-interaction --no-progress --prefer-dist --ignore-platform-req=ext-gd
+
+      - name: Tests
+        run: sh tests/run.sh
+
+      - name: The check CLI exits 1 in a project without a configuration (not protected)
+        run: |
+          set +e
+          bin/sudare-check "$RUNNER_TEMP"
+          status=$?
+          set -e
+          [ "$status" = "1" ] || { echo "::error::expected exit 1 without a configuration, got $status"; exit 1; }
+
+      - name: The hash CLI works in a pipe and prints a config file
+        run: |
+          printf 'ci-only-password\n' | bin/sudare-hash --user=ci > "$RUNNER_TEMP/sudare.php"
+          php -l "$RUNNER_TEMP/sudare.php"
+          php -r '$c = require $argv[1]; exit(password_verify("ci-only-password", $c["hash"]) && $c["user"] === "ci" ? 0 : 1);' "$RUNNER_TEMP/sudare.php"

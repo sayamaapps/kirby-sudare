@@ -1,0 +1,26 @@
+#!/usr/bin/env php
+<?php
+/**
+ * Creates the password hash for Sudare and prints a complete configuration
+ * file — the content of the deploy secret (SPEC.md §9.1, README "Setup").
+ *
+ *   vendor/bin/sudare-hash --user=preview > site/config/sudare.php
+ *   printf '%s\n' "$PASSWORD" | vendor/bin/sudare-hash --user=anne --legacy
+ *   vendor/bin/sudare-hash --user=preview --token      # also a machine token for CI
+ *
+ * The password is read from STDIN, hidden on a terminal, never from an
+ * argument: an argument would go through the shell (which eats `$`, `"`
+ * and `\`) and land in the history and the process list. Only the hash
+ * leaves this program; the plain password never does.
+ *
+ * Exit codes: 0 ok, 1 bad input (empty, shorter than 8, roundtrip failed),
+ * 3 wrong usage. Written by the architect (SPEC.md §9).
+ */
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    exit;
+}
+
+require_once dirname(__DIR__) . '/bootstrap.php';
+
+exit(Sudare\Cli::hash($argv, STDIN, STDOUT, STDERR, getenv()));

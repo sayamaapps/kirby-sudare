@@ -1,0 +1,25 @@
+# Lines for public/.htaccess of a Sudare site. Only the lines the site adds or
+# keeps; everything else of the starter's .htaccess stays as it is.
+
+# Generated media (thumbnails, uploads) goes through index.php, so Sudare checks the password first. Already in kirby-starter —
+# there without [NC]: on a case-insensitive file system (macOS, Windows/NTFS) Apache finds "Media/…" on disk and serves it
+# past the password unless the rule matches regardless of case. [NC] costs nothing on Linux.
+RewriteRule ^media/(.*) index.php [NC,L]
+
+# Public assets go through index.php too, so Sudare serves them behind the same password. New: add below the media line.
+RewriteRule ^assets/(.*) index.php [NC,L]
+
+# Hands the Authorization header to PHP; without it, FastCGI servers never see the Basic Auth login. Keep unchanged.
+SetEnvIf Authorization "(.+)" HTTP_AUTHORIZATION=$1
+
+# Keeps the Basic Auth credentials available to PHP on FastCGI servers. Keep unchanged.
+CGIPassAuth On
+
+# Behind Apache + PHP-FPM (mod_proxy_fcgi; measured on 2.4.67, likely since the 2.4.59 hardening): Apache drops the Content-Length of every
+# PHP response unless this is set, so media files arrive chunked and HEAD has no size. Kirby sets no wrong lengths.
+SetEnv ap_trust_cgilike_cl 1
+
+# Only if the site has a Content-Security-Policy with style-src 'self' (kirby-starter has one): the 401 page's
+# colours are one inline <style>. vendor/bin/sudare-check prints its hash; add it to style-src, e.g.
+#   style-src 'self' 'sha256-…';
+# Without it the 401 page shows unstyled, which is harmless.

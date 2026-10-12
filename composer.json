@@ -1,0 +1,60 @@
+{
+    "name": "sayamaapps/kirby-sudare",
+    "description": "Preview protection for Kirby CMS sites before launch: Basic Auth in front of Kirby, noindex on every response, media and assets served through PHP so they are protected too. Runs before Kirby boots.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "kirby",
+        "kirby-5",
+        "preview",
+        "staging",
+        "basic-auth",
+        "noindex",
+        "access-control"
+    ],
+    "homepage": "https://github.com/simsimmal/kirby-sudare",
+    "authors": [
+        {
+            "name": "Simon Räder",
+            "homepage": "https://sayamaapps.de"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/simsimmal/kirby-sudare/issues",
+        "source": "https://github.com/simsimmal/kirby-sudare"
+    },
+    "require": {
+        "php": "^8.2",
+        "ext-mbstring": "*"
+    },
+    "require-dev": {
+        "getkirby/cms": "^5.0"
+    },
+    "autoload": {
+        "files": [
+            "bootstrap.php"
+        ]
+    },
+    "bin": [
+        "bin/sudare-hash",
+        "bin/sudare-check"
+    ],
+    "scripts": {
+        "test": "sh tests/run.sh"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "allow-plugins": {
+            "getkirby/composer-installer": true
+        },
+        "platform": {
+            "php": "8.2.0"
+        }
+    },
+    "extra": {
+        "kirby-cms-path": false,
+        "kirby": {
+            "compatible": "^5.0"
+        }
+    }
+}

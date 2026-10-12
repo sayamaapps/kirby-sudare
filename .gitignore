@@ -1,0 +1,6 @@
+/vendor/
+/kirby/
+/composer.lock
+.DS_Store
+# Builder notes are working files, not part of the package.
+/NOTES-*.md
