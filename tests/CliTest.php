@@ -98,9 +98,9 @@ foreach (['--cost=3', '--cost=32', '--cost=abc', '--cost=', '--cost'] as $bad) {
     expect(Cli::EXIT_USAGE, cliHash([$bad], $pw . "\n")[0], "hash: $bad is a usage error");
 }
 
-[$code, $out] = cliHash(['--user=anne', '--realm=Vorschau X'], $pw . "\n");
+[$code, $out] = cliHash(['--user=client', '--realm=Vorschau X'], $pw . "\n");
 $config = cliLoad($out);
-expect(['anne', 'Vorschau X'], [$config['user'], $config['realm']], 'hash: --user and --realm honoured');
+expect(['client', 'Vorschau X'], [$config['user'], $config['realm']], 'hash: --user and --realm honoured');
 
 [$code, $out, $err] = cliHash(['--user=ci', '--token'], $pw . "\n");
 preg_match('/\b([0-9a-f]{48})\b/', $err, $match);

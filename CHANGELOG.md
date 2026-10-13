@@ -16,8 +16,7 @@ All notable changes to this project are documented here. Versions follow
 
 First release as a Composer package. Before 1.0.0 the preview guard lived as a
 copy in each site: `site/config/vorschauschutz.php` (byte-identical in
-kirby-starter, radladen, gasthaus-muster, mustergasthaus,
-kundenseite and sayamaapps.de), a deviating copy in praxisbeispiel (themed
+kirby-starter and six client sites), a deviating copy in one client site (themed
 401 page, `vorschauAktiv()`), and the scripts `scripts/hash-erzeugen.php` and
 `scripts/pruefe-zugangsdaten.php` of kirby-starter. The changes below are
 measured against kirby-starter's copy.
@@ -37,7 +36,7 @@ table below. The legacy `credentials.php` keeps working without changes.
 | `vorschauschutz($basis)` | `Sudare\Sudare::guard($base)` |
 | `vorschauMedien($basis)` | built into `guard()`: `media/` and `assets/` are served through PHP |
 | `vorschauAbweisen()` | `Page::denied()`, called by `guard()` |
-| `vorschauAktiv($basis)` (praxisbeispiel) | `Sudare\Sudare::active()` after `guard()`, or `Sudare\Sudare::protects($base)` anywhere |
+| `vorschauAktiv($basis)` (deviating copy) | `Sudare\Sudare::active()` after `guard()`, or `Sudare\Sudare::protects($base)` anywhere |
 | `site/config/credentials.php` with `vorschau.benutzer`, `vorschau.hash`, `vorschau.realm` | still read; the same file as `site/config/sudare.php` with `user`, `hash`, `realm` |
 | `scripts/hash-erzeugen.php` | `vendor/bin/sudare-hash` |
 | `scripts/pruefe-zugangsdaten.php` | `vendor/bin/sudare-check` |

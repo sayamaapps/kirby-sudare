@@ -5,7 +5,7 @@
  * file — the content of the deploy secret (SPEC.md §9.1, README "Setup").
  *
  *   vendor/bin/sudare-hash --user=preview > site/config/sudare.php
- *   printf '%s\n' "$PASSWORD" | vendor/bin/sudare-hash --user=anne --legacy
+ *   printf '%s\n' "$PASSWORD" | vendor/bin/sudare-hash --user=client --legacy
  *   vendor/bin/sudare-hash --user=preview --token      # also a machine token for CI
  *
  * The password is read from STDIN, hidden on a terminal, never from an

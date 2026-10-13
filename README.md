@@ -181,13 +181,13 @@ What a site does:
 
 1. Keep `site/config/credentials.php` for now. To switch to the new file, create `site/config/sudare.php` with `vendor/bin/sudare-hash --user=…`, or copy the existing `hash` value over. `sudare.php` wins once it exists; remove `credentials.php` afterwards (after a check with `sudare-check`) so that only one source remains.
 2. Replace the guard in `public/index.php`: `vorschauschutz($base)` and `vorschauMedien($base)` become the single `Sudare\Sudare::guard($base)` after `require vendor/autoload.php`. Assets: add the `assets/` line to `.htaccess`.
-3. Delete from the site: `site/config/vorschauschutz.php`, `scripts/hash-erzeugen.php`, `scripts/pruefe-zugangsdaten.php` and the two tests of the old guard. `vorschauschutz.php` was byte-identical in six sites; the copy in praxisbeispiel differed (themed page, `vorschauAktiv()`).
+3. Delete from the site: `site/config/vorschauschutz.php`, `scripts/hash-erzeugen.php`, `scripts/pruefe-zugangsdaten.php` and the two tests of the old guard. `vorschauschutz.php` was byte-identical in six sites; the copy in one client site differed (themed page, `vorschauAktiv()`).
 4. Replace the "is this a preview?" checks:
-   - `vorschauAktiv($base)` becomes `\Sudare\Sudare::active()` (after `guard()`) or `\Sudare\Sudare::protects($base)` (anywhere, without state). praxisbeispiel's `site()->vorschau()` in `site/plugins/praxis/index.php` is an example.
+   - `vorschauAktiv($base)` becomes `\Sudare\Sudare::active()` (after `guard()`) or `\Sudare\Sudare::protects($base)` (anywhere, without state). a client site's `site()->vorschau()` in `site/plugins/praxis/index.php` is an example.
    - Annai's noindex hook: `class_exists(\Sudare\Sudare::class) && \Sudare\Sudare::active()`.
-   - mustergasthaus's `kizami.previewAccess` may read `Sudare::config()?->user()`. The hash stays private, so it keeps reading the file itself.
-   - mustergasthaus's `kizami.report` treats the existence of `credentials.php` as "this is not a preview". After the switch to `sudare.php` that test has to become `Sudare::protects($base)`; this package does not change the site's `config.php`.
-5. Secrets: the preview slots that deploy today still write `credentials.php` from the `CREDENTIALS_PHP` secret (for example slot2 and slot3 in `deploy-setup`'s `docs/vorschau-slots.md`). That keeps working; a new deploy uses `SUDARE_PHP`.
+   - a client site's `kizami.previewAccess` may read `Sudare::config()?->user()`. The hash stays private, so it keeps reading the file itself.
+   - a client site's `kizami.report` treats the existence of `credentials.php` as "this is not a preview". After the switch to `sudare.php` that test has to become `Sudare::protects($base)`; this package does not change the site's `config.php`.
+5. Secrets: the preview slots that deploy today still write `credentials.php` from the `CREDENTIALS_PHP` secret (for example two preview slots of the deploy setup). That keeps working; a new deploy uses `SUDARE_PHP`.
 
 ## Behaviour
 
@@ -383,7 +383,7 @@ The tests are standalone PHP scripts, without PHPUnit, and run on a plain PHP 8.
 - **Sudare protects what reaches PHP.** Everything the web server serves by itself bypasses it:
   - Any real file in `public/` outside `media/` and `assets/` (the starter's `.htaccess` sends only missing files to `index.php`). Keep `public/` free of other static files, or add a rewrite for them.
   - A rewrite that matches only lower-case `media/`: on a case-insensitive file system (macOS, Windows/NTFS) Apache finds `Media/…` on disk and serves it past the password. The rules in [`examples/htaccess.txt`](examples/htaccess.txt) carry `[NC]` for that reason; check a site's own `.htaccess`.
-  - A host whose front server (Plesk's nginx with "serve static files directly", a CDN) answers existing files before Apache runs: then `media/**` and `assets/**` never see `.htaccess`. Neither `sudare-check` nor the tests can see this — **after every first deploy, request an existing media file without credentials; the answer must be 401**, not the file. In Plesk, switch "Serve static files directly by nginx" off for a preview. On a plain nginx + FPM server the usual Kirby block (`try_files $uri $uri/ /index.php?$query_string`) serves existing files itself; give `media/` and `assets/` their own `location ^~ /media/ { rewrite ^ /index.php last; }` (same for `/assets/`) so they reach PHP.
+  - A host whose front server (the hosting panel's nginx with "serve static files directly", a CDN) answers existing files before Apache runs: then `media/**` and `assets/**` never see `.htaccess`. Neither `sudare-check` nor the tests can see this — **after every first deploy, request an existing media file without credentials; the answer must be 401**, not the file. In the hosting panel, switch "Serve static files directly by nginx" off for a preview. On a plain nginx + FPM server the usual Kirby block (`try_files $uri $uri/ /index.php?$query_string`) serves existing files itself; give `media/` and `assets/` their own `location ^~ /media/ { rewrite ^ /index.php last; }` (same for `/assets/`) so they reach PHP.
 - Hashes are bcrypt with cost 10 by default (`sudare-hash --cost=N` for more). Every authenticated request through PHP — each image, each stylesheet — verifies the password once; at cost 12 (PHP's default since 8.4) that is ~250 ms of CPU per file on a shared host, at 10 ~60–85 ms. A `Config` accepts any hash `password_get_info()` knows, so a pasted Argon2 hash works too.
 
 ## Deviations from the plugin family

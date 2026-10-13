@@ -27,7 +27,7 @@ holds(!Options::has([], 'exempt'), 'absent');
 
 // envKey()/env(): empty string = unset.
 expect('SUDARE_USER', Options::envKey('user'), 'env key');
-expect('anne', Options::env(['SUDARE_USER' => 'anne'], 'user'), 'env value');
+expect('client', Options::env(['SUDARE_USER' => 'client'], 'user'), 'env value');
 expect(null, Options::env(['SUDARE_USER' => ''], 'user'), 'empty env value is unset');
 expect('d', Options::env([], 'user', 'd'), 'env default');
 holds(Options::envPresent(['SUDARE_HASH' => 'x']), 'envPresent with one key');
