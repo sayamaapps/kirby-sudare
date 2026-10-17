@@ -4,7 +4,9 @@
  * The facade in fresh PHP processes (SPEC.md §10.7). Every case runs
  * Sudare::guard() through sudare_php(), so exit code, http_response_code()
  * and stdout are real. header() is a no-op in the CLI: headers are checked
- * in HttpTest.php, where a real server sends them.
+ * in HttpTest.php, where a real server sends them. The one pure part of the
+ * seal, Sudare::sealed(), is checked here; that the seal is registered and
+ * sent is in HttpTest.php and KirbyHttpTest.php.
  */
 
 require_once __DIR__ . '/helpers.php';
@@ -231,5 +233,93 @@ $r = sudare_php(
     sudare_basic('preview', $password, sudare_request('/'))
 );
 expect("'d'|NULL|'preview'|NULL|'x'", $r['out'], 'sudare_option(): default before guard(), user after guard(), hash never');
+
+/* --------------------------------------------------------------------------
+ * The seal: what Sudare sets again when PHP sends the response (pure)
+ * -------------------------------------------------------------------------- */
+
+$sealing = \Sudare\Guard::headers();
+$sealedRobots = 'noindex, nofollow, noarchive';
+$sealedCache = 'private, no-store';
+
+// Cache-Control and X-Robots-Tag: the protective value replaces what was sent.
+expect(
+    ['X-Robots-Tag' => $sealedRobots, 'Cache-Control' => $sealedCache, 'Vary' => 'Authorization, X-Sudare-Token'],
+    Sudare::sealed($sealing, ['Cache-Control: public, max-age=2592000', 'X-Robots-Tag: all']),
+    'sealed(): Cache-Control and X-Robots-Tag replace what a plugin sent'
+);
+expect(
+    ['X-Robots-Tag' => $sealedRobots, 'Cache-Control' => $sealedCache, 'Vary' => 'Authorization, X-Sudare-Token'],
+    Sudare::sealed($sealing, ['cache-control: public, max-age=2592000', 'X-ROBOTS-TAG:all']),
+    'sealed(): header names in the sent lines match case-insensitively, with or without a space after the colon'
+);
+expect(
+    ['X-Robots-Tag' => 'a', 'Cache-Control' => 'b'],
+    Sudare::sealed(['X-Robots-Tag' => 'a', 'Cache-Control' => 'b'], ['cache-control: c', 'x-robots-tag: d']),
+    'sealed(): the result carries the protective spelling of the name'
+);
+expect(
+    ['Cache-Control' => 'private, no-store'],
+    Sudare::sealed(['Cache-Control' => 'private, no-store'], ['Cache-Control: no-cache', 'Cache-Control: public']),
+    'sealed(): Cache-Control sent twice is replaced by one value'
+);
+
+// Vary only grows: what was sent first, then what Sudare adds.
+expect(
+    'Cookie, Authorization, X-Sudare-Token',
+    Sudare::sealed($sealing, ['Vary: Cookie'])['Vary'] ?? null,
+    'sealed(): Vary merges, sent values first (Kirby\'s Cookie stays)'
+);
+expect(
+    'Authorization, X-Sudare-Token',
+    Sudare::sealed($sealing, [])['Vary'] ?? null,
+    'sealed(): no Vary sent, the protective Vary alone'
+);
+expect(
+    'authorization, X-Sudare-Token',
+    Sudare::sealed($sealing, ['Vary: authorization'])['Vary'] ?? null,
+    'sealed(): a sent value in another case is not repeated, its spelling stays'
+);
+expect(
+    'Cookie, Accept-Encoding, Authorization, X-Sudare-Token',
+    Sudare::sealed($sealing, ['vary: Cookie', 'Vary: Accept-Encoding, COOKIE'])['Vary'] ?? null,
+    'sealed(): two sent Vary lines, in order, without duplicates'
+);
+expect(
+    'Cookie, Accept, Authorization, X-Sudare-Token',
+    Sudare::sealed($sealing, ['Vary:  Cookie ,, Accept ,'])['Vary'] ?? null,
+    'sealed(): values are trimmed, empty ones dropped'
+);
+expect(
+    '*',
+    Sudare::sealed($sealing, ['Vary: *'])['Vary'] ?? null,
+    'sealed(): a sent * wins'
+);
+expect(
+    '*',
+    Sudare::sealed($sealing, ['Vary: Cookie, *', 'Vary: Accept'])['Vary'] ?? null,
+    'sealed(): a * among other values wins'
+);
+expect(
+    '*',
+    Sudare::sealed(['Vary' => 'Authorization, *'], ['Vary: Cookie'])['Vary'] ?? null,
+    'sealed(): a protective * wins too'
+);
+expect(
+    ['vary' => 'Cookie, Authorization'],
+    Sudare::sealed(['vary' => 'Authorization'], ['Vary: Cookie']),
+    'sealed(): the protective Vary is found whatever its spelling, which the result keeps'
+);
+
+// Only protective headers come back.
+$sealed = Sudare::sealed($sealing, ['X-Kirby: yes', 'Content-Type: image/png', 'X-Content-Type-Options: nosniff', 'not a header line', 'Vary: Cookie']);
+expect(['X-Robots-Tag', 'Cache-Control', 'Vary'], array_keys($sealed), 'sealed(): a header that is not protective is not in the result');
+expect($sealing, Sudare::sealed($sealing, ['X-Kirby: yes']), 'sealed(): without a Vary line the result is the protective headers unchanged');
+expect([], Sudare::sealed([], ['Vary: Cookie', 'Cache-Control: public']), 'sealed(): no protective headers, nothing to set');
+expect(
+    ['Cache-Control' => 'private, no-store'],
+    Sudare::sealed(['Cache-Control' => 'private, no-store'], ['Vary: Cookie']),
+    'sealed(): no protective Vary, the sent Vary is left alone'
+);
 
 finish('Sudare facade (subprocess)');

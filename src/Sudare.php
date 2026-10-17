@@ -12,8 +12,16 @@ namespace Sudare;
  *   echo (new Kirby\Cms\App([...]))->render();
  *
  * Everything that decides is pure and testable without exit: handle() returns
- * a Response; guard() is handle() + emit() + exit. Only guard() and emit()
- * touch PHP's output and header functions.
+ * a Response; guard() is handle() + emit() + exit. Only guard(), emit() and
+ * seal() touch PHP's output and header functions.
+ *
+ * The headers of a response that passes are sent before Kirby runs, and
+ * Kirby's own Response::send() replaces whatever header it sets by name — a
+ * plugin route's `Cache-Control: public, max-age=…` would leave the preview
+ * cacheable. So emit() also registers seal() with header_register_callback(),
+ * which PHP runs right before it sends the headers: Cache-Control and
+ * X-Robots-Tag are set again, Vary is merged. PHP keeps one such callback per
+ * request: code that registers its own replaces the seal.
  *
  * The contract for other packages (Annai adds noindex when it is true):
  *
@@ -76,16 +84,24 @@ final class Sudare
     /**
      * Sends a Response: headers always; status, body or file only when it is
      * not a pass (a pass leaves the status to Kirby). Never exits.
+     *
+     * A pass with headers also registers the seal (see the class comment):
+     * Kirby has not run yet and may replace what is sent here. Sudare's own
+     * answers (401, 503, 204, files) end the request and need no seal.
      */
     public static function emit(Response $response): void
     {
         if (!$response->passes()) {
             http_response_code($response->status());
         }
-        foreach ($response->headers() as $name => $value) {
+        $headers = $response->headers();
+        foreach ($headers as $name => $value) {
             header($name . ': ' . $value, true);
         }
         if ($response->passes()) {
+            if ($headers !== []) {
+                header_register_callback(static fn () => self::seal($headers));
+            }
             return;
         }
         $file = $response->filePath();
@@ -95,6 +111,86 @@ final class Sudare
         } elseif ($response->body() !== '') {
             echo $response->body();
         }
+    }
+
+    /**
+     * Sets the protective headers again, right before PHP sends the response
+     * (the callback emit() registers). Headers that Kirby or a plugin set in
+     * the meantime are replaced; Vary is merged. No output, no exit, no
+     * change of the status.
+     *
+     * @param array<string,string> $protective the headers of the pass response
+     */
+    public static function seal(array $protective): void
+    {
+        foreach (self::sealed($protective, headers_list()) as $name => $value) {
+            header_remove($name);
+            header($name . ': ' . $value, true);
+        }
+    }
+
+    /**
+     * What seal() sets again — pure. Every protective header with its own
+     * value, which replaces whatever was sent under that name; except Vary,
+     * which only ever grows: all values of all sent Vary lines first, then the
+     * protective ones not yet present (case-insensitive, the first spelling
+     * stays), or `*` when any of them is `*`. Headers that are not protective
+     * are not in the result.
+     *
+     * @param array<string,string> $protective name => value of the pass response
+     * @param list<string>         $sent       lines as headers_list() returns them ("Name: value")
+     * @return array<string,string> name => value to set again
+     */
+    public static function sealed(array $protective, array $sent): array
+    {
+        $result = [];
+        $vary = null;
+        $varyName = null;
+        foreach ($protective as $name => $value) {
+            $name = (string) $name;
+            if (strcasecmp($name, 'Vary') === 0) {
+                $varyName ??= $name;
+                $vary = array_merge($vary ?? [], self::tokens((string) $value));
+                continue;
+            }
+            $result[$name] = (string) $value;
+        }
+        if ($varyName === null) {
+            return $result;
+        }
+
+        $merged = [];
+        foreach ($sent as $line) {
+            $pos = strpos((string) $line, ':');
+            if ($pos !== false && strcasecmp(trim(substr((string) $line, 0, $pos)), 'Vary') === 0) {
+                $merged = array_merge($merged, self::tokens(substr((string) $line, $pos + 1)));
+            }
+        }
+        $merged = array_merge($merged, $vary);
+
+        $unique = [];
+        foreach ($merged as $token) {
+            if ($token === '*') {
+                $unique = ['*'];
+                break;
+            }
+            $unique[strtolower($token)] ??= $token;
+        }
+        $result[$varyName] = implode(', ', $unique);
+        return $result;
+    }
+
+    /** @return list<string> the comma-separated values of a header, trimmed, empty ones dropped */
+    private static function tokens(string $value): array
+    {
+        $tokens = [];
+        foreach (explode(',', $value) as $token) {
+            $token = trim($token);
+            if ($token !== '') {
+                $tokens[] = $token;
+            }
+        }
+        return $tokens;
     }
 
     /**

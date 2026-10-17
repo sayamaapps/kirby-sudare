@@ -12,7 +12,9 @@ namespace Sudare;
  * case-insensitive and a header set twice keeps the last value.
  *
  * A "pass" response may still carry headers: Sudare::guard() sends them
- * before Kirby runs (X-Robots-Tag, Cache-Control, Vary on a protected site).
+ * before Kirby runs (X-Robots-Tag, Cache-Control, Vary on a protected site)
+ * and seals them again when PHP sends the response (Sudare::seal()), so what
+ * Kirby or a plugin sets in between cannot replace them.
  *
  * PHP 8.2: `(new self(...))->withHeaders()` needs the parentheses; the
  * bare `new self(...)->` form is PHP 8.4 syntax.
