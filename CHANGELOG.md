@@ -12,6 +12,22 @@ All notable changes to this project are documented here. Versions follow
   **[privacy text]**. Every site using the package must then review its privacy
   policy.
 
+## [2.1.1] — 2026-10-17
+
+### Fixed
+
+- **A damaged `$2y$` hash is a broken configuration, not a working one.** A
+  `$2y$` hash damaged when the configuration was edited or copied (a cost
+  outside 04–31, a character outside the bcrypt alphabet) was accepted as
+  valid, because `password_get_info()` checks only the prefix and the length
+  of a bcrypt hash. The preview was `on`, `sudare-check` exited 0, the deploy
+  gate let it through, and every login answered 401. Now `Config::isHash()`
+  checks every bcrypt prefix (`$2a$`, `$2b$`, `$2x$`, `$2y$`) for the full
+  shape and an Argon2 hash for its encoded form, by syntax only, before
+  anything is verified. Such a configuration is `broken` (503,
+  `sudare-check` exit 2, reason `hash` or `token`), as the same damage with a
+  `$2a$` or `$2b$` prefix already was. Valid hashes are unchanged.
+
 ## [2.1.0] — 2026-10-17
 
 ### Fixed

@@ -115,8 +115,8 @@ final class Cli
         }
 
         // bcrypt explicitly, with the cost above: PASSWORD_DEFAULT may change
-        // algorithm or cost with a PHP release, and Config accepts any hash
-        // password_get_info() knows, so a site can still paste an Argon2 one.
+        // algorithm or cost with a PHP release, and Config accepts bcrypt
+        // and Argon2 hashes alike, so a site can still paste an Argon2 one.
         $hash = password_hash($password, PASSWORD_BCRYPT, ['cost' => $cost]);
         if (!password_verify($password, $hash)) {
             fwrite($err, I18n::t('cli.hash.mismatch') . "\n");
