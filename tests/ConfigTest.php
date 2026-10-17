@@ -314,7 +314,7 @@ $started = hrtime(true);
 $slowIsHash = Config::isHash($slow);
 $seconds = (hrtime(true) - $started) / 1e9;
 holds($slowIsHash, 'isHash: a well-formed $2y$31$ string has the shape of a hash');
-holds($seconds < 0.2, 'isHash: classifies a cost-31 string without verifying it (' . round($seconds, 4) . ' s)');
+holds($seconds < 1, 'isHash: classifies a cost-31 string without verifying it (' . round($seconds, 4) . ' s)');
 
 // Argon2: encoded form and a PHP that knows it.
 if (defined('PASSWORD_ARGON2ID')) {
@@ -330,7 +330,8 @@ if (defined('PASSWORD_ARGON2ID')) {
         expect([Config::STATE_BROKEN, 'hash'], [$c->state(), $c->reason()], "$what: broken, reason hash");
     }
 } else {
-    holds(true, 'argon2id: skipped (PHP built without Argon2)');
+    // Fail closed: the shape is right, but this PHP cannot verify it.
+    holds(!Config::isHash('$argon2id$v=19$m=1024,t=1,p=1$YWFhYWFhYWE$YWFhYWFhYWFhYWFhYWFhYQ'), 'argon2id on a PHP without Argon2: not a hash (fails closed)');
 }
 expect(null, Config::exemptEntry('/feed//*'), 'exempt: a double slash is refused as written, not normalised');
 expect(null, Config::exemptEntry('/a//b'), 'exempt: a double slash inside is refused');

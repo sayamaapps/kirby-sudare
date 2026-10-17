@@ -469,19 +469,23 @@ final class Config
      *
      * Regular expressions only, never password_verify() or crypt(): those
      * would take years for a well-formed cost-31 hash. `D` on the patterns,
-     * so a trailing newline is not part of a hash. A hash with the right
-     * shape that is the hash of nothing simply fails at login.
+     * so a trailing newline is not part of a hash; isHash() does not trim,
+     * fromArray() does before it asks. A hash with the right shape that is
+     * the hash of nothing simply fails at login.
      */
     public static function isHash(string $hash): bool
     {
         if (str_starts_with($hash, '$2')) {
             return self::isBcrypt($hash);
         }
-        if (str_starts_with($hash, '$argon2')) {
-            return preg_match('#^\$argon2(?:i|id)\$(?:v=\d+\$)?m=\d+,t=\d+,p=\d+\$[A-Za-z0-9+/]+\$[A-Za-z0-9+/]+$#D', $hash) === 1
-                && (password_get_info($hash)['algoName'] ?? 'unknown') !== 'unknown';
-        }
-        return (password_get_info($hash)['algoName'] ?? 'unknown') !== 'unknown';
+        $known = (password_get_info($hash)['algoName'] ?? 'unknown') !== 'unknown';
+        return str_starts_with($hash, '$argon2') ? self::isArgon2($hash) && $known : $known;
+    }
+
+    /** The encoded Argon2 form; `v=` is optional (older encodings), the lengths are not checked. */
+    private static function isArgon2(string $hash): bool
+    {
+        return preg_match('#^\$argon2id?\$(?:v=\d+\$)?m=\d+,t=\d+,p=\d+\$[A-Za-z0-9+/]+\$[A-Za-z0-9+/]+$#D', $hash) === 1;
     }
 
     /** The full bcrypt shape, any prefix password_verify() takes (python-bcrypt writes `$2b$`, some htpasswd builds `$2a$`/`$2x$`). */

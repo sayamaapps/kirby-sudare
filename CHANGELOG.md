@@ -26,7 +26,10 @@ All notable changes to this project are documented here. Versions follow
   shape and an Argon2 hash for its encoded form, by syntax only, before
   anything is verified. Such a configuration is `broken` (503,
   `sudare-check` exit 2, reason `hash` or `token`), as the same damage with a
-  `$2a$` or `$2b$` prefix already was. Valid hashes are unchanged.
+  `$2a$` or `$2b$` prefix already was. The reason texts for `hash` and `token`
+  now say "not a complete password hash" instead of "not a hash PHP
+  recognises", which was exactly the misleading part. Valid hashes are
+  unchanged.
 
 ## [2.1.0] — 2026-10-17
 

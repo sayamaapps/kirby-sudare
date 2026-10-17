@@ -210,7 +210,7 @@ holds(str_contains($out, 'configuration valid') && str_contains($out, 'credentia
 $plain = cliRoot('sudare.php', "<?php return ['user' => 'test', 'hash' => 'plain-password-here'];");
 [$code, $out, $err] = cliCheck([$plain]);
 expect(Cli::EXIT_BROKEN, $code, 'check: broken configuration exits 2');
-holds(str_contains($out, 'PHP recognises'), 'check: broken reason text');
+holds(str_contains($out, 'complete password hash'), 'check: broken reason text');
 holds(!str_contains($out . $err, 'plain-password-here') && !str_contains($out . $err, '$2y$'), 'check: no secret in broken output');
 
 // A damaged $2y$ hash (cost 99) has the right prefix and length, so
@@ -219,7 +219,7 @@ $cost99 = substr_replace(sudare_hash(), '99', 4, 2);
 $damagedHash = cliRoot('sudare.php', "<?php return ['user' => 'test', 'hash' => " . var_export($cost99, true) . "];");
 [$code, $out, $err] = cliCheck([$damagedHash]);
 expect(Cli::EXIT_BROKEN, $code, 'check: a $2y$ hash with cost 99 exits 2');
-holds(str_contains($out, '"hash" is not a password hash'), 'check: damaged hash names the reason hash');
+holds(str_contains($out, '"hash" is not a complete password hash'), 'check: damaged hash names the reason hash');
 holds(!str_contains($out . $err, $cost99), 'check: damaged hash never printed');
 $damagedToken = cliRoot('sudare.php', "<?php return ['user' => 'test', 'hash' => " . var_export(sudare_hash(), true) . ", 'token' => " . var_export($cost99, true) . "];");
 [$code, $out, $err] = cliCheck([$damagedToken]);
