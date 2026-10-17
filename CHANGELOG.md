@@ -12,6 +12,21 @@ All notable changes to this project are documented here. Versions follow
   **[privacy text]**. Every site using the package must then review its privacy
   policy.
 
+## [2.0.0] — 2026-10-17
+
+### Changed — protective header (major by the rules above)
+
+- **No `Cache-Control` for `assets/` on the open site** (`none`, `off`). Sudare
+  sent `public, no-cache`, which overruled the server's own caching rules
+  (`mod_expires`, versioned URLs) for every live site that keeps the
+  `assets/` rewrite: the browser re-requested CSS, JavaScript, fonts and
+  images on every page view and got a 304 each time. Now the server decides,
+  as if the rewrite were not there. Protected sites are unchanged
+  (`private, no-cache`), `media/` is unchanged (a year, the URLs are hashed).
+  After updating, an asset under `assets/` whose URL carries no version may
+  stay in browsers for as long as the server's rules allow; give such URLs a
+  version (`?v=…`) or a shorter `ExpiresByType`.
+
 ## [1.0.0] — 2026-10-12
 
 First release as a Composer package. Before 1.0.0 the preview guard lived as a
