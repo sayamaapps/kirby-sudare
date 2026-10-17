@@ -277,6 +277,62 @@ expect(Config::STATE_BROKEN, cfgArray(['user' => 'x', 'hash' => '$2a$04$'])->sta
 expect(Config::STATE_ON, cfgArray(['user' => 'x', 'hash' => $hash . "\n"])->state(), 'hash with a trailing newline: on');
 expect(Config::STATE_ON, cfgArray(['user' => 'x', 'hash' => $hash, 'token' => ' ' . $hash . "\n"])->state(), 'token with surrounding whitespace: on');
 expect(Config::STATE_ON, Config::load(sudare_tmp(), ['SUDARE_USER' => 'env', 'SUDARE_HASH' => $hash . "\n"])->state(), 'SUDARE_HASH with a trailing newline: on');
+// A hash damaged while the configuration was edited or copied is broken, not
+// "on" with every login answering 401: password_get_info() checks only the
+// prefix and the length of a $2y$ hash, Config checks the whole shape.
+$goodY = password_hash('x', PASSWORD_BCRYPT, ['cost' => 4]);
+holds(strlen($goodY) === 60 && str_starts_with($goodY, '$2y$04$'), 'fixture: real cost-4 $2y$ hash');
+$cost99 = substr_replace($goodY, '99', 4, 2);
+$cost03 = substr_replace($goodY, '03', 4, 2);
+$badChar = substr_replace($goodY, '!', 10, 1);
+$damaged = [
+    '$2y$ cost 99' => $cost99,
+    '$2y$ cost 03' => $cost03,
+    '$2y$ with "!" in the salt' => $badChar,
+    '$2y$ 59 characters' => substr($goodY, 0, 59),
+    '$2y$ 61 characters' => $goodY . 'a',
+];
+holds(!Config::isHash($goodY . "\n"), 'isHash: a trailing newline is not part of a hash (Config trims, isHash() does not)');
+foreach ($damaged as $what => $bad) {
+    holds(!Config::isHash($bad), "isHash: $what is not a hash");
+    $c = cfgArray(['user' => 'x', 'hash' => $bad]);
+    expect([Config::STATE_BROKEN, 'hash'], [$c->state(), $c->reason()], "$what as hash: broken, reason hash");
+    $t = cfgArray(['user' => 'x', 'hash' => $goodY, 'token' => $bad]);
+    expect([Config::STATE_BROKEN, 'token'], [$t->state(), $t->reason()], "$what as token: broken, reason token");
+}
+$envBad = Config::load(sudare_tmp(), ['SUDARE_USER' => 'env', 'SUDARE_HASH' => $cost99]);
+expect([Config::STATE_BROKEN, 'hash'], [$envBad->state(), $envBad->reason()], 'SUDARE_HASH with $2y$ cost 99: broken, reason hash');
+$goodY2 = cfgArray(['user' => 'x', 'hash' => $goodY]);
+expect([Config::STATE_ON, 'bcrypt'], [$goodY2->state(), $goodY2->algorithm()], 'valid $2y$ hash: on, algorithm bcrypt');
+$foreignX = cfgArray(['user' => 'x', 'hash' => str_replace('$2a$', '$2x$', $foreign)]);
+expect([Config::STATE_ON, 'bcrypt'], [$foreignX->state(), $foreignX->algorithm()], 'valid $2x$ shape: on, algorithm bcrypt');
+expect(null, cfgArray(['user' => 'x', 'hash' => $cost99])->algorithm(), 'damaged $2y$ hash: no algorithm');
+
+// The check is syntax only: a well-formed cost-31 hash would take years to verify.
+$slow = '$2y$31$' . str_repeat('a', 53);
+$started = hrtime(true);
+$slowIsHash = Config::isHash($slow);
+$seconds = (hrtime(true) - $started) / 1e9;
+holds($slowIsHash, 'isHash: a well-formed $2y$31$ string has the shape of a hash');
+holds($seconds < 1, 'isHash: classifies a cost-31 string without verifying it (' . round($seconds, 4) . ' s)');
+
+// Argon2: encoded form and a PHP that knows it.
+if (defined('PASSWORD_ARGON2ID')) {
+    $argon = password_hash('x', PASSWORD_ARGON2ID, ['memory_cost' => 1024, 'time_cost' => 1, 'threads' => 1]);
+    $argonConfig = cfgArray(['user' => 'x', 'hash' => $argon]);
+    expect([Config::STATE_ON, 'argon2id'], [$argonConfig->state(), $argonConfig->algorithm()], 'argon2id hash: on, algorithm argon2id');
+    $segments = explode('$', $argon);
+    $cut = implode('$', array_slice($segments, 0, -1));
+    $segments[count($segments) - 2] = substr_replace($segments[count($segments) - 2], '!', 3, 0);
+    $badSalt = implode('$', $segments);
+    foreach (['argon2id without its last segment' => $cut, 'argon2id with "!" in the salt' => $badSalt] as $what => $bad) {
+        $c = cfgArray(['user' => 'x', 'hash' => $bad]);
+        expect([Config::STATE_BROKEN, 'hash'], [$c->state(), $c->reason()], "$what: broken, reason hash");
+    }
+} else {
+    // Fail closed: the shape is right, but this PHP cannot verify it.
+    holds(!Config::isHash('$argon2id$v=19$m=1024,t=1,p=1$YWFhYWFhYWE$YWFhYWFhYWFhYWFhYWFhYQ'), 'argon2id on a PHP without Argon2: not a hash (fails closed)');
+}
 expect(null, Config::exemptEntry('/feed//*'), 'exempt: a double slash is refused as written, not normalised');
 expect(null, Config::exemptEntry('/a//b'), 'exempt: a double slash inside is refused');
 
