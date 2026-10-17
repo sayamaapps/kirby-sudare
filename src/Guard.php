@@ -14,6 +14,9 @@ final class Guard
 {
     public const ROBOTS = 'noindex, nofollow, noarchive';
 
+    /** A token-authenticated answer and an anonymous one are different variants for a shared cache. */
+    public const VARY = 'Authorization, ' . Request::TOKEN_HEADER;
+
     public const RETRY_AFTER = '300';
 
     public const ALLOW = 'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS';
@@ -24,7 +27,7 @@ final class Guard
         return [
             'X-Robots-Tag'  => self::ROBOTS,
             'Cache-Control' => 'private, no-store',
-            'Vary'          => 'Authorization',
+            'Vary'          => self::VARY,
         ];
     }
 

@@ -214,11 +214,11 @@ Rows 2 and 4 apply only to a path **as sent**: no `.` or `..` segment, no double
 |---|---|
 | `X-Robots-Tag` | `noindex, nofollow, noarchive` |
 | `Cache-Control` | `private, no-store` |
-| `Vary` | `Authorization` |
+| `Vary` | `Authorization, X-Sudare-Token` |
 
 The 401 adds `WWW-Authenticate: Basic realm="…", charset="UTF-8"`. The 503 adds `Retry-After: 300`. Files under `media/` and `assets/` carry their own cache headers (see below). While the state is `none` or `off`, Sudare sends no header at all.
 
-On a request that passes, Sudare sends these headers before Kirby runs, and Kirby may replace one of them: the Panel and the API send their own `Vary: Cookie`. `Cache-Control: private, no-store` stays, so shared caches still keep nothing.
+On a request that passes, Sudare sends these headers before Kirby runs and **seals** them again when PHP sends the response. Kirby and its plugins replace headers by name, and a plugin route may answer with `Cache-Control: public, max-age=2592000` (a thumbnail route does). At the seal, `Cache-Control` and `X-Robots-Tag` are set again and replace whatever Kirby or a plugin set: that route's `public, max-age=…`, the Panel's and the API's own values. `Vary` is merged, not replaced: the Panel's `Vary: Cookie` becomes `Vary: Cookie, Authorization, X-Sudare-Token`. `Vary` names the token header too, so a shared cache keeps an answer for a request with `X-Sudare-Token` apart from an anonymous one. Other headers of Kirby (`Content-Type`, `X-Content-Type-Options`, …) are left alone. Sudare's own answers (401, 503, 204, files) need no seal, and with the state `none` or `off` there is none.
 
 **Passwords.** User and password are checked in constant time: the user names are compared as SHA-256 digests, and the password is always verified, even for a wrong user, so both cost the same time. Matching is case-sensitive.
 
@@ -238,7 +238,9 @@ On a request that passes, Sudare sends these headers before Kirby runs, and Kirb
 |---|---|
 | `Sudare\Sudare::guard($base, $public = null, $server = null, $env = null)` | Decides, sends the headers and exits unless the request passes. `$public` defaults to `$base/public`. |
 | `Sudare\Sudare::handle($base, $public, $server, $env)` | The same decision as a `Response`, without output and without exit. Remembers the configuration. |
-| `Sudare\Sudare::emit($response)` | Sends a `Response`: its headers, and the status and body or file unless it passes. Never exits. |
+| `Sudare\Sudare::emit($response)` | Sends a `Response`: its headers, and the status and body or file unless it passes. Never exits. A pass that has headers also registers the seal (`header_register_callback()`). |
+| `Sudare\Sudare::seal($protective)` | Sets the protective headers again, right before PHP sends the response. `emit()` registers it; no need to call it yourself. |
+| `Sudare\Sudare::sealed($protective, $sent)` | Pure: which headers `seal()` sets, from the protective ones and the lines of `headers_list()`. |
 | `Sudare\Sudare::active()` | `true` when the request of this process is behind the blind. `false` before `guard()`. |
 | `Sudare\Sudare::protects($base, $env = null)` | Stateless: would `guard($base)` protect? It reads the files and the environment of the *calling* process: in a CLI (`annai-check`, a build step) the web server's `SetEnv` or FPM `env[]` variables are not visible, so a configuration that lives only there reads as `none`. `sudare-check` has the same limit and names the variables it counts (`--env`). |
 | `Sudare\Sudare::config()` | The loaded `Config`, or `null`. |
@@ -259,7 +261,7 @@ Sudare serves these files **whether or not the site is protected**, for `GET` an
 | `Cache-Control` under `assets/` | `private, no-cache` | — (none; the server's rules apply) |
 | `ETag`, `Last-Modified` | from size and modification time | the same |
 | `X-Robots-Tag` | `noindex, nofollow, noarchive` | — |
-| `Vary` | `Authorization` | — |
+| `Vary` | `Authorization, X-Sudare-Token` | — |
 | `X-Content-Type-Options` | `nosniff` | `nosniff` |
 
 Kirby puts a hash into every `media/` URL that changes with the file, so a year is safe there. `assets/` URLs stay the same after a deploy. While protected, a reviewer's browser therefore asks again each time and gets a `304 Not Modified` (no body) while the file is unchanged, answered from `If-None-Match` or `If-Modified-Since`; shared caches may not keep anything. On the open site (`none`, `off`) Sudare sends **no** `Cache-Control` for `assets/`: caching is the server's business then, exactly as if the rewrite were not there. Apache's `mod_expires` (the starter's `.htaccess` has `ExpiresByType` rules) or a versioned URL (`app.css?v=…`) decides, and the browser does not ask again on every page view. Until 1.0.0 Sudare sent `public, no-cache` here, which cost every page view of a live site one round trip per asset.
@@ -355,7 +357,7 @@ With PHP's built-in server, the router script is called for every request, real 
 composer test        # sh tests/run.sh
 ```
 
-The tests are standalone PHP scripts, without PHPUnit, and run on a plain PHP 8.2+:
+The tests are standalone PHP scripts, without PHPUnit, and run on a plain PHP 8.2+ (`KirbyHttpTest` needs Kirby from `composer install` and prints `skipped` without it):
 
 | File | Covers |
 |---|---|
@@ -367,7 +369,8 @@ The tests are standalone PHP scripts, without PHPUnit, and run on a plain PHP 8.
 | `tests/MediaTest.php` | the media and assets allowlists, traversal, symlinks, headers |
 | `tests/CliTest.php` | `sudare-hash` and `sudare-check`, both binaries |
 | `tests/SudareTest.php` | the facade in fresh PHP processes |
-| `tests/HttpTest.php` | real HTTP through PHP's built-in server: status lines and headers |
+| `tests/HttpTest.php` | real HTTP through PHP's built-in server: status lines and headers, and the seal against a stand-in for Kirby |
+| `tests/KirbyHttpTest.php` | the same server with a real Kirby: a plugin route's `public, max-age=…` against the seal |
 
 `tests/helpers.php` holds the shared helpers. `HttpTest` starts the built-in server on a free port and stops it at the end.
 
@@ -380,6 +383,7 @@ The tests are standalone PHP scripts, without PHPUnit, and run on a plain PHP 8.
 - Basic Auth sends the credentials with every request. **Use HTTPS**, and the token too: both are only as safe as the connection.
 - The file under `site/config/` is read by PHP and must not be served: the starter's `.htaccess` routes `site/` to `index.php`. Keep it out of Git (`site/config/sudare.php` in `.gitignore`).
 - Sudare sends no `Location` header and never redirects.
+- The seal of the protective headers is PHP's `header_register_callback()`. PHP keeps **one** callback per request: a site or plugin that registers its own replaces Sudare's, and the seal is gone. That code then has to set `Cache-Control`, `X-Robots-Tag` and `Vary` itself.
 - **Sudare protects what reaches PHP.** Everything the web server serves by itself bypasses it:
   - Any real file in `public/` outside `media/` and `assets/` (the starter's `.htaccess` sends only missing files to `index.php`). Keep `public/` free of other static files, or add a rewrite for them.
   - A rewrite that matches only lower-case `media/`: on a case-insensitive file system (macOS, Windows/NTFS) Apache finds `Media/…` on disk and serves it past the password. The rules in [`examples/htaccess.txt`](examples/htaccess.txt) carry `[NC]` for that reason; check a site's own `.htaccess`.
@@ -398,7 +402,7 @@ Sudare follows the conventions of the other sayamaapps packages (Composer metada
 | Translations registered as Kirby translations | `Sudare::translations()` returns the prefixed tables for a site plugin | Cannot register before Kirby exists. |
 | Unstyled snippets, array methods | One inline-styled 401 page with a `theme` option | There is no template engine before Kirby. The page must be self-contained. |
 | `<name>_option()` reads Kirby | `sudare_option()` reads the loaded configuration (non-secret keys) | Same reason. |
-| Kirby-booting tests | No Kirby test. `HttpTest` runs PHP's built-in server with a stand-in for Kirby | Kirby is irrelevant to the behaviour. `getkirby/cms` stays a dev dependency, so a later handover test is possible. |
+| Kirby-booting tests | One Kirby test, `KirbyHttpTest`; the rest runs PHP's built-in server with a stand-in for Kirby | Kirby is irrelevant to the decision, but not to the seal, which has to hold against Kirby's own responses. `getkirby/cms` is a dev dependency only. |
 
 ## Privacy
 

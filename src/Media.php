@@ -146,7 +146,7 @@ final class Media
             $headers = [
                 'Cache-Control' => 'private, ' . ($media ? 'max-age=' . self::MAX_AGE : 'no-cache'),
                 'X-Robots-Tag'  => Guard::ROBOTS,
-                'Vary'          => 'Authorization',
+                'Vary'          => Guard::VARY,
             ];
         } else {
             $headers = $media ? ['Cache-Control' => 'public, max-age=' . self::MAX_AGE] : [];

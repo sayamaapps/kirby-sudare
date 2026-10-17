@@ -187,7 +187,7 @@ holds($protected !== null, 'protected: webp served');
 if ($protected !== null) {
     expect('private, max-age=31536000', $protected->header('Cache-Control'), 'protected: Cache-Control private');
     expect('noindex, nofollow, noarchive', $protected->header('X-Robots-Tag'), 'protected: X-Robots-Tag');
-    expect('Authorization', $protected->header('Vary'), 'protected: Vary Authorization');
+    expect('Authorization, X-Sudare-Token', $protected->header('Vary'), 'protected: Vary names Authorization and the token header');
     expect('nosniff', $protected->header('X-Content-Type-Options'), 'protected: nosniff');
     expect('image/webp', $protected->header('Content-Type'), 'protected: Content-Type');
     expect((string) strlen('CONTENT media/pages/p/image.webp'), $protected->header('Content-Length'), 'protected: Content-Length is the byte count');

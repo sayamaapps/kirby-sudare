@@ -49,9 +49,9 @@ comments and task prompts.
 - Code, identifiers, comments, README in **English**. German only in
   `translations/de.php` and `DATENSCHUTZ.md`.
 - **Kirby-free everywhere.** Sudare runs before Kirby boots. No `kirby()`,
-  no `option()`, no `App`, not even in tests (Kirby is a dev dependency only
-  so the HTTP test can prove the handover to a real Kirby if it wants to; it
-  does not have to).
+  no `option()`, no `App` in `src/` or `bootstrap.php`. Tests do not use Kirby
+  either, with one exception: `tests/KirbyHttpTest.php` (§10.9) boots a real
+  Kirby (a dev dependency) to prove what the seal (§6.1) exists for.
 - Every user-facing string comes from `I18n::t()` (keys in §5). Need a key
   that does not exist? Do NOT add it — write it into `NOTES-<task>.md` and use
   the closest existing key.
@@ -124,8 +124,9 @@ kirby-sudare/
 │   ├── PageTest.php               guard       (§10.4)
 │   ├── MediaTest.php              media       (§10.5)
 │   ├── CliTest.php                cli         (§10.6)
-│   ├── SudareTest.php             docs-http   (§10.7, subprocess)
-│   └── HttpTest.php               docs-http   (§10.8, PHP built-in server)
+│   ├── SudareTest.php             docs-http   (§10.7, subprocess; sealed() pure)
+│   ├── HttpTest.php               docs-http   (§10.8, PHP built-in server)
+│   └── KirbyHttpTest.php          docs-http   (§10.9, built-in server with a real Kirby; skipped without vendor/)
 ├── README.md                      docs-http   (§11)
 ├── CHANGELOG.md                   docs-http
 ├── PRIVACY.md                     docs-http
@@ -160,8 +161,8 @@ One file: `ASDF_PHP_VERSION=8.5.3 php tests/GuardTest.php`.
 Everything is Kirby-free. `Guard`, `Page`, `Config`, `Request`, `Response`,
 `Options`, `I18n` touch neither `$_SERVER`, `header()`, `exit` nor the file
 system (Config reads its config file, Media reads the file it serves —
-nothing else). Only `Sudare::guard()`/`emit()` and the `bin/` wrappers have
-side effects.
+nothing else). Only `Sudare::guard()`/`emit()`/`seal()` and the `bin/` wrappers
+have side effects.
 
 ### 3.1 `bootstrap.php` (architect) — the entry point
 
@@ -243,7 +244,7 @@ Example `toArray()` of a 401:
 ```php
 ['status' => 401,
  'headers' => ['Content-Type' => 'text/html; charset=utf-8', 'X-Robots-Tag' => 'noindex, nofollow, noarchive',
-               'Cache-Control' => 'private, no-store', 'Vary' => 'Authorization',
+               'Cache-Control' => 'private, no-store', 'Vary' => 'Authorization, X-Sudare-Token',
                'WWW-Authenticate' => 'Basic realm="Preview", charset="UTF-8"'],
  'body' => '<!doctype html>…', 'file' => null, 'pass' => false]
 ```
@@ -287,7 +288,8 @@ final class Guard
   const ROBOTS = 'noindex, nofollow, noarchive';
   const RETRY_AFTER = '300';
   const ALLOW = 'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS';
-  static headers(): array        // ['X-Robots-Tag' => ROBOTS, 'Cache-Control' => 'private, no-store', 'Vary' => 'Authorization']
+  const VARY = 'Authorization, ' . Request::TOKEN_HEADER;   // 'Authorization, X-Sudare-Token'
+  static headers(): array        // ['X-Robots-Tag' => ROBOTS, 'Cache-Control' => 'private, no-store', 'Vary' => VARY]
   static handle(Config $config, Request $request): Response
   static sameUser(string $expected, string $given): bool   // hash_equals(hash('sha256',…), hash('sha256',…))
 ```
@@ -328,7 +330,10 @@ final class Sudare
   static guard(string $base, ?string $public = null, ?array $server = null, ?array $env = null): void
       // handle() + emit(); exit unless the response passes. $public defaults to "$base/public".
   static handle(string $base, ?string $public, array $server, array $env): Response   // pure, remembers Config
-  static emit(Response $response): void      // headers; status+body/file when not a pass; never exits
+  static emit(Response $response): void      // headers; status+body/file when not a pass; never exits;
+                                             // a pass WITH headers also registers the seal (header_register_callback)
+  static seal(array $protective): void       // sets the protective headers again right before PHP sends the response (§6.1)
+  static sealed(array $protective, array $sent): array   // PURE: name => value to set again; $sent = headers_list() lines
   static active(): bool                      // THE CONTRACT: Config of this request protects(); false before guard()
   static config(): ?Config
   static protects(string $base, ?array $env = null): bool   // stateless re-evaluation
@@ -485,10 +490,40 @@ placeholders in both files.
 ### 6.1 Protective headers
 
 `Guard::headers()` =
-`['X-Robots-Tag' => 'noindex, nofollow, noarchive', 'Cache-Control' => 'private, no-store', 'Vary' => 'Authorization']`.
+`['X-Robots-Tag' => 'noindex, nofollow, noarchive', 'Cache-Control' => 'private, no-store', 'Vary' => 'Authorization, X-Sudare-Token']`.
 They are on **every** response while the state is `on` or `broken` — pass,
 401, 503, 204 — and Media adds its own variant for files (§8.3). While `none`
-or `off`, Sudare sends **no header at all**.
+or `off`, Sudare sends **no header at all**. `Vary` names `X-Sudare-Token`
+(`Request::TOKEN_HEADER`) too: a request authenticated by the token header is
+otherwise the same cache variant as an anonymous one.
+
+**The seal.** A pass leaves the response to Kirby, and `Kirby\Http\Response::send()`
+sets its own headers with `header($key . ': ' . $value)`, which replaces
+Sudare's by name — a plugin route answering `Cache-Control: public,
+max-age=2592000` would leave the preview cacheable by a shared cache. So
+`Sudare::emit()` registers `header_register_callback(static fn () =>
+Sudare::seal($headers))` for a response that **passes and has headers**.
+PHP runs the callback right before it sends the headers; `headers_list()`
+then shows everything set so far, Kirby's included. `seal()` calls the pure
+`Sudare::sealed($protective, $sent)` and for every name in the result runs
+`header_remove($name)` and `header($name . ': ' . $value, true)`. Nothing
+else: no output, no exit, no status change.
+
+- Every protective header is set again with its own value, replacing
+  whatever was sent under that name (header names compare case-insensitively).
+- **`Vary` is the exception: it only grows.** All values of all sent `Vary`
+  lines come first (split on `,`, trimmed, empty ones dropped, in order), then
+  the protective values not yet present. Values compare case-insensitively,
+  the first spelling stays; if any value is `*`, the result is `*`. The
+  Panel's `Vary: Cookie` becomes `Cookie, Authorization, X-Sudare-Token`.
+- Headers that are not protective (`Content-Type`, `X-Content-Type-Options`,
+  …) are not touched.
+- No seal for Sudare's own answers (401, 503, 204, files: they end the
+  request and keep their own headers), and none without headers (`none`,
+  `off`).
+- PHP keeps **one** such callback per request: code that registers its own
+  after `guard()` replaces the seal, and that code has to set the headers
+  itself.
 
 ### 6.2 Decision table (`Guard::handle($config, $request)`), first match wins
 
@@ -619,7 +654,7 @@ output buffers (an active buffer would hold the whole file in memory).
 | `Cache-Control`, `assets/` | `private, no-cache` | `public, no-cache` |
 | `ETag`, `Last-Modified` | size + mtime | same |
 | `X-Robots-Tag` | `noindex, nofollow, noarchive` | — |
-| `Vary` | `Authorization` | — |
+| `Vary` | `Authorization, X-Sudare-Token` | — |
 | `X-Content-Type-Options` | `nosniff` | `nosniff` |
 | `Accept-Ranges` | `bytes` | `bytes` |
 | `Content-Type`, `Content-Length` | from `Response::file()` | same |
@@ -867,7 +902,7 @@ and `$on`/`Config::none()`):
 | `$media = false` → `/media/...` null; `$assets = false` → `/assets/...` null | | |
 
 Headers (`respond()`): protected → `Cache-Control: private, max-age=31536000`,
-`X-Robots-Tag`, `Vary: Authorization`, `X-Content-Type-Options: nosniff`,
+`X-Robots-Tag`, `Vary: Authorization, X-Sudare-Token`, `X-Content-Type-Options: nosniff`,
 `Content-Length` = byte count; `none` → `public, max-age=31536000`, no
 X-Robots-Tag, no Vary. `filePath()` is the realpath. Also one subprocess
 check with `sudare_php()`: `Sudare::guard()` on `none` state + `/media/pages/p/image.webp`
@@ -923,6 +958,17 @@ With `sudare_php()` (header() invisible, so check exit/status/body):
 - `sudare_option('user')` → user after guard; `sudare_option('hash')` → null; before guard → default.
 - `Sudare::protects($root)` true/false without state.
 - `Sudare::translations()['de']['sudare.realm'] === 'Vorschau'`.
+- `Sudare::sealed()` pure (§6.1), with `Guard::headers()` as `$protective`:
+  `Cache-Control` and `X-Robots-Tag` take the protective value over what was
+  sent (names compare case-insensitively, the result keeps the protective
+  spelling); `Vary` merges — sent `Cookie` gives `Cookie, Authorization,
+  X-Sudare-Token`; no sent `Vary` gives the protective one; a sent
+  `authorization` is not repeated and keeps its spelling; two sent `Vary`
+  lines merge in order; values are trimmed and empty ones dropped; `*` wins
+  (sent or protective); a header that is not protective is not in the result;
+  empty `$sent` gives the protective headers unchanged. `seal()` itself is not
+  visible here (`header()` and `headers_list()` do nothing in the CLI): it is
+  proved in §10.8 and §10.9.
 
 ### 10.8 `tests/HttpTest.php` (docs-http) — PHP built-in server, real headers
 
@@ -934,6 +980,11 @@ Fixture: `$root = sudare_tmp()`; router `$root/public/index.php`:
 $base = dirname(__DIR__);
 require '<abs path to package>/bootstrap.php';
 Sudare\Sudare::guard($base);
+if (($_GET['override'] ?? '') === '1') {   // what Kirby or a plugin route does after guard()
+    header('Cache-Control: public, max-age=2592000');
+    header('Vary: Cookie');
+    header('X-Robots-Tag: all');
+}
 header('X-Kirby: yes');              // stands in for Kirby
 echo 'KIRBY ', Sudare\Sudare::active() ? 'active' : 'inactive';
 ```
@@ -945,7 +996,7 @@ requests — the file is read per request):
 1. No config: GET `/` → 200, body `KIRBY inactive`, **no** `x-robots-tag`, no `vary`.
 2. Valid config: GET `/` → 401, `www-authenticate` = `Basic realm="Preview", charset="UTF-8"`,
    `x-robots-tag` = `noindex, nofollow, noarchive`, `cache-control` = `private, no-store`,
-   `vary` = `Authorization`, `content-type` starts `text/html`, body contains `not public yet`, no `KIRBY`.
+   `vary` = `Authorization, X-Sudare-Token`, `content-type` starts `text/html`, body contains `not public yet`, no `KIRBY`.
 3. GET `/` with `Authorization: Basic …` right → 200, body `KIRBY active`, `x-kirby: yes`,
    and the three protective headers present; wrong → 401.
 4. HEAD `/` → 401, headers present, body `''`. OPTIONS `/` → 204, `allow` present.
@@ -957,6 +1008,13 @@ requests — the file is read per request):
    HEAD on the webp → 200, `content-length: 8`, body `''`.
 7. Token: `X-Sudare-Token: <plain>` → 200 `KIRBY active`; wrong token → 401.
 8. Exempt `/api/hook` → 200 without credentials, with `x-robots-tag`.
+8a. The seal, `/?override=1`: with Basic Auth, with a valid token, and on the exempt path
+   without credentials → 200, body `KIRBY active`, `x-kirby: yes`, `cache-control` =
+   `private, no-store`, `vary` = `Cookie, Authorization, X-Sudare-Token`, `x-robots-tag` =
+   `noindex, nofollow, noarchive` (the router's values are replaced; `sudare_http()` joins
+   repeated headers with ", "). Without credentials → 401, the router not reached. With
+   state `off` (`active => false`) and with no configuration → 200, `KIRBY inactive`,
+   the router's own `public, max-age=2592000`, `Cookie` and `all`: no seal.
 9. ACME: a token file → 200 with its content, a missing one → empty 404, both without credentials and without reaching "Kirby"; `/panel/../.well-known/acme-challenge/x` → 401. Exempt paths only as sent: `/panel/../api/hook`, `/api//hook`, `/api%2Fhook`, `/%61pi/hook` → 401.
 10. Broken config (plain hash) → 503 on `/`, `/panel`, `/media/pages/p/img.webp`; `retry-after: 300`; body is the one sentence; the ACME file still 200, a missing one 404. A file that calls `exit` → 503, its output never sent.
 10a. Ranges on an asset: `bytes=0-1` → 206 + `content-range`, `bytes=10-` on 10 bytes → 416, `If-Range` → whole file.
@@ -965,6 +1023,31 @@ requests — the file is read per request):
 13. Legacy `credentials.php` → realm `Vorschau`, German body.
 
 Stop the server in a `finally`/at the end; print its log on failure.
+
+### 10.9 `tests/KirbyHttpTest.php` (docs-http) — the same, with a real Kirby
+
+Without `vendor/autoload.php`, or when `Kirby\Cms\App` does not exist after
+requiring it, the file prints `skipped: Kirby not installed` and exits 0 (CI
+runs `composer install` first). Otherwise: a temp project with `content/site.txt`,
+`content/home/home.txt` (`Title: Home`) and `site/templates/default.php`; a router
+`public/index.php` that sets `SCRIPT_NAME`/`SCRIPT_FILENAME`/`PHP_SELF` (as
+`examples/index.php` does), requires `vendor/autoload.php`, calls
+`Sudare\Sudare::guard($base)` and echoes `(new Kirby\Cms\App([...]))->render()`
+with a route `thumb` that answers `new Kirby\Http\Response('PNGBYTES',
+'image/png', 200, ['Cache-Control' => 'public, max-age=2592000',
+'X-Content-Type-Options' => 'nosniff'])` — a thumbnail route. Scenarios:
+
+1. No configuration: `/thumb` → 200, `PNGBYTES`, `cache-control` = `public, max-age=2592000`,
+   no `x-robots-tag`; `/` renders the home page.
+2. Valid configuration with a token: anonymous `/thumb` → 401, no `PNGBYTES`; a wrong token → 401.
+3. `X-Sudare-Token` right, `/thumb` → 200, `PNGBYTES`, `content-type` starts `image/png`,
+   `cache-control` = `private, no-store`, `vary` contains `Authorization` and `X-Sudare-Token`,
+   `x-robots-tag` = `noindex, nofollow, noarchive`, `x-content-type-options` = `nosniff`
+   (Kirby's own header survives the seal).
+4. Basic Auth `/` → 200 with the page title and the sealed headers.
+5. The configuration file removed → `/thumb` → 200 with `public, max-age=2592000` again, no `x-robots-tag`.
+
+Stop the server in a `finally`.
 
 ---
 
@@ -1013,7 +1096,7 @@ built in, `vorschauAbweisen()` → `Page::denied()`, `vorschauAktiv()` →
 `Sudare::active()`/`protects()`, `credentials.php` `vorschau.benutzer` → still
 read / `sudare.php` `user`, `hash-erzeugen.php` → `sudare-hash`,
 `pruefe-zugangsdaten.php` → `sudare-check`), "Changed behaviour" (headers on
-every response incl. pass and media; `Vary: Authorization`; HEAD/OPTIONS
+every response incl. pass and media; `Vary: Authorization, X-Sudare-Token`; HEAD/OPTIONS
 handled; assets served; token; exempt; 401 page gets viewport + theme-color +
 `<meta name=robots>`; 503 gets Retry-After; example-hash check and token
 check; language English by default, German for the legacy file) and
@@ -1055,7 +1138,7 @@ on a case-insensitive file system serves `Media/…` past the password),
 | Translations registered as Kirby translations | `Sudare::translations()` returns the prefixed tables for a site plugin | cannot register before Kirby exists |
 | Unstyled snippets + array methods | one inline-styled 401 page with a `theme` option | there is no template engine before Kirby; the page must be self-contained |
 | `<name>_option()` reads Kirby | `sudare_option()` reads the loaded Config (non-secret keys) | same |
-| Kirby-booting tests with `vendor/` | no Kirby test; `HttpTest` uses PHP's built-in server with a stand-in for Kirby | Kirby is irrelevant to the behaviour; getkirby/cms stays a dev dependency only so a later Kirby handover test is possible |
+| Kirby-booting tests with `vendor/` | one Kirby test, `KirbyHttpTest`, skipped without `vendor/`; everything else uses PHP's built-in server with a stand-in for Kirby | Kirby is irrelevant to the decision; it matters for the seal (§6.1), which has to hold against Kirby's own `Response::send()`. getkirby/cms stays a dev dependency only |
 
 Everything else follows the family: composer metadata, MIT, author, support
 URLs, `scripts.test`, `config.platform.php 8.2.0`, namespace = PascalCase
@@ -1106,19 +1189,28 @@ fork-PR guard, `.gitignore` with `vendor/`.
 10. **Token is stored hashed**, verified with `password_verify`; the plain
     token is printed once by `sudare-hash --token`. Header name
     `X-Sudare-Token`. Smoke tests can use it instead of the Basic password.
-11. **`Vary: Authorization` + `Cache-Control: private, no-store` on pages,
-    `private, max-age=1y` on files** — a reviewer's browser may cache
-    hashed media URLs; shared caches may not.
+11. **`Vary: Authorization, X-Sudare-Token` + `Cache-Control: private, no-store`
+    on pages, `private, max-age=1y` on files** — a reviewer's browser may cache
+    hashed media URLs; shared caches may not. `Vary` names the token header
+    too: a token-authenticated answer and an anonymous one are
+    different cache variants.
 12. **Minimum password length stays 8** (as the original). Raise to 12?
 13. **User names are compared in constant time via SHA-256 digests**
     (`hash_equals` on equal-length digests), and user+password checks are
     both always evaluated.
-14. **No Kirby test.** `HttpTest` runs PHP's built-in server with a two-line
-    stand-in for Kirby. Kirby remains a dev dependency (family convention,
-    and in case a real handover test is wanted later).
+14. **One Kirby test.** `HttpTest` runs PHP's built-in server with a two-line
+    stand-in for Kirby; `KirbyHttpTest` lets a real Kirby answer,
+    because the seal has to hold against Kirby's own `Response::send()`.
+    Kirby remains a dev dependency (family convention).
 15. **Package does not touch kirby-starter or any site.** The migration
     (index.php, .htaccess assets line, deleting vorschauschutz.php and the two
     scripts, Annai's noindex hook, a client site's `kizami.previewAccess`) is
     listed in README → "Migration" for a later rollout.
 16. **Secret name `SUDARE_PHP`** recommended for new deploys; the existing
     `CREDENTIALS_PHP` continues to work with the legacy file name.
+17. **The protective headers of a pass are sealed.** Sending them
+    before Kirby is not enough: Kirby's `Response::send()` replaces headers by
+    name, so a plugin route's `Cache-Control: public, max-age=…` would leave
+    the preview cacheable. `header_register_callback()` runs right before PHP
+    sends the headers and sets them again (§6.1). Cost: PHP keeps one such
+    callback per request, so a site that registers its own removes the seal.

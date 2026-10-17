@@ -12,6 +12,32 @@ All notable changes to this project are documented here. Versions follow
   **[privacy text]**. Every site using the package must then review its privacy
   policy.
 
+## [Unreleased]
+
+### Fixed
+
+- **The protective headers are sealed when PHP sends the response.** Sudare
+  sent `Cache-Control: private, no-store` before Kirby ran, and Kirby's own
+  response then replaced it by name: a plugin route that answers with
+  `Cache-Control: public, max-age=2592000` (a thumbnail route, say) left the
+  preview with a public cache header, and a shared cache in front of it served
+  the protected bytes to anonymous requests. `X-Robots-Tag` could be replaced
+  the same way. Now `guard()` registers `header_register_callback()`, and
+  `Sudare::seal()` sets `Cache-Control` and `X-Robots-Tag` again right before
+  PHP sends the headers, whatever Kirby or a plugin set in between. `Vary` is
+  merged, not replaced: the Panel's `Vary: Cookie` becomes
+  `Vary: Cookie, Authorization, X-Sudare-Token`. Sudare's own answers (401,
+  503, 204, files) and a site without a configuration are unchanged. PHP keeps
+  one such callback per request: a site or plugin that registers its own
+  replaces the seal and has to set the headers itself.
+- **`Vary` names `X-Sudare-Token` as well** (`Vary: Authorization,
+  X-Sudare-Token`). A request authenticated by the token header was the same
+  cache variant as an anonymous one; now a token-authenticated answer and an
+  anonymous one are different variants.
+
+The value of a protective header changes (`Vary` gains a value); nothing is
+weakened.
+
 ## [2.0.0] — 2026-10-17
 
 ### Changed — protective header (major by the rules above)
