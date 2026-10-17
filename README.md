@@ -256,13 +256,13 @@ Sudare serves these files **whether or not the site is protected**, for `GET` an
 | Header | Protected (`on`, `broken` never gets here) | `none` / `off` |
 |---|---|---|
 | `Cache-Control` under `media/` | `private, max-age=31536000` | `public, max-age=31536000` |
-| `Cache-Control` under `assets/` | `private, no-cache` | `public, no-cache` |
+| `Cache-Control` under `assets/` | `private, no-cache` | — (none; the server's rules apply) |
 | `ETag`, `Last-Modified` | from size and modification time | the same |
 | `X-Robots-Tag` | `noindex, nofollow, noarchive` | — |
 | `Vary` | `Authorization` | — |
 | `X-Content-Type-Options` | `nosniff` | `nosniff` |
 
-Kirby puts a hash into every `media/` URL that changes with the file, so a year is safe there. `assets/` URLs stay the same after a deploy: the browser asks again each time and gets a `304 Not Modified` (no body) while the file is unchanged, answered from `If-None-Match` or `If-Modified-Since`. While protected, only a reviewer's own browser may cache; shared caches may not. Apache's `mod_expires` (the starter's `.htaccess` has `ExpiresByType` rules) adds its own `Expires` and a second `Cache-Control: max-age=…` next to Sudare's: browsers follow the stricter `no-cache`, so this is harmless, but a site that wants one clean header limits `ExpiresByType` to the public deploy or drops it for `assets/`.
+Kirby puts a hash into every `media/` URL that changes with the file, so a year is safe there. `assets/` URLs stay the same after a deploy. While protected, a reviewer's browser therefore asks again each time and gets a `304 Not Modified` (no body) while the file is unchanged, answered from `If-None-Match` or `If-Modified-Since`; shared caches may not keep anything. On the open site (`none`, `off`) Sudare sends **no** `Cache-Control` for `assets/`: caching is the server's business then, exactly as if the rewrite were not there. Apache's `mod_expires` (the starter's `.htaccess` has `ExpiresByType` rules) or a versioned URL (`app.css?v=…`) decides, and the browser does not ask again on every page view. Until 1.0.0 Sudare sent `public, no-cache` here, which cost every page view of a live site one round trip per asset.
 
 **Byte ranges.** Every served file carries `Accept-Ranges: bytes`. A `GET` with one range (`Range: bytes=0-1`, `bytes=500-`, `bytes=-500`) gets `206` with `Content-Range` and only those bytes; a range that starts beyond the file gets `416`. Safari and iOS play video and audio only from a server that does this. With `If-Range`, the part is sent only when the value is the file's current `ETag` or `Last-Modified`; otherwise, and for several ranges in one header or `HEAD`, the whole file goes out. Files are streamed in chunks past any output buffer, so a video larger than `memory_limit` works too.
 
