@@ -12,7 +12,7 @@ All notable changes to this project are documented here. Versions follow
   **[privacy text]**. Every site using the package must then review its privacy
   policy.
 
-## [Unreleased]
+## [2.1.0] — 2026-10-17
 
 ### Fixed
 
@@ -35,8 +35,10 @@ All notable changes to this project are documented here. Versions follow
   cache variant as an anonymous one; now a token-authenticated answer and an
   anonymous one are different variants.
 
-The value of a protective header changes (`Vary` gains a value); nothing is
-weakened.
+The value of a protective header changes (`Vary` gains a value), which the
+rules above call a major version. This is a minor version on purpose: nothing
+is weakened, and sites pin `^2.0`, so a 3.0.0 would not reach them with a
+routine update.
 
 ## [2.0.0] — 2026-10-17
 
