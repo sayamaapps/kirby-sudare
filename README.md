@@ -31,7 +31,7 @@ composer require sayamaapps/kirby-sudare
 Until the package is on Packagist, add the repository first:
 
 ```json
-"repositories": [{ "type": "vcs", "url": "https://github.com/simsimmal/kirby-sudare" }]
+"repositories": [{ "type": "vcs", "url": "https://github.com/sayamaapps/kirby-sudare" }]
 ```
 
 The package is of Composer type `library`. It lands in `vendor/sayamaapps/kirby-sudare/`, **not** in `site/plugins/`, and it is not a Kirby plugin. It has to run before Kirby exists, so a plugin would load too late (see [Deviations from the plugin family](#deviations-from-the-plugin-family)). Make sure the deploy ships `vendor/`, as it ships `kirby/`.
