@@ -36,7 +36,7 @@ comments and task prompts.
 | Legacy config template | `../kirby-starter/site/config/credentials.example.php` |
 | Preview slots | the deploy setup (not public) |
 | Consumers of "is this a preview?" | `<client site>/site/plugins/praxis/index.php` (`site()->vorschau()`), `<client site>/site/config/config.php` (`kizami.report`, `kizami.previewAccess`) |
-| Family conventions | `../kirby-noren` (SPEC, README, CHANGELOG, PRIVACY, DATENSCHUTZ, tests/helpers.php), `../kirby-koe` (CLI as a testable `run()` function, `bin/koe-fetch`), `../kirby-kizami` (`bin/`) |
+| Family conventions | `../kirby-noren` (SPEC, README, CHANGELOG, tests/helpers.php), `../kirby-koe` (CLI as a testable `run()` function, `bin/koe-fetch`), `../kirby-kizami` (`bin/`) |
 
 ---
 
@@ -47,7 +47,7 @@ comments and task prompts.
   Run with `ASDF_PHP_VERSION=8.5.3 php …` (asdf otherwise says "No version is
   set"). Composer: `php ~/Applications/PHP_Composer/composer.phar`.
 - Code, identifiers, comments, README in **English**. German only in
-  `translations/de.php` and `DATENSCHUTZ.md`.
+  `translations/de.php`.
 - **Kirby-free everywhere.** Sudare runs before Kirby boots. No `kirby()`,
   no `option()`, no `App` in `src/` or `bootstrap.php`. Tests do not use Kirby
   either, with one exception: `tests/KirbyHttpTest.php` (§10.9) boots a real
@@ -128,9 +128,7 @@ kirby-sudare/
 │   ├── HttpTest.php               docs-http   (§10.8, PHP built-in server)
 │   └── KirbyHttpTest.php          docs-http   (§10.9, built-in server with a real Kirby; skipped without vendor/)
 ├── README.md                      docs-http   (§11)
-├── CHANGELOG.md                   docs-http
-├── PRIVACY.md                     docs-http
-└── DATENSCHUTZ.md                 docs-http
+└── CHANGELOG.md                   docs-http
 ```
 
 Run everything: `cd <this repository> && ASDF_PHP_VERSION=8.5.3 sh tests/run.sh`.
@@ -1086,7 +1084,7 @@ notes (bcrypt via `password_hash`, constant-time user compare, fail closed,
 no secrets in output, Basic Auth needs HTTPS — the token too); Privacy link;
 Changelog link; License.
 
-### 11.2 `CHANGELOG.md`, `PRIVACY.md`, `DATENSCHUTZ.md`
+### 11.2 `CHANGELOG.md`
 
 CHANGELOG: Keep a Changelog, SemVer, `## [1.0.0] — unreleased`, with the
 project rule "a change to a header or to the default of `active`/`media`/
@@ -1103,16 +1101,7 @@ check; language English by default, German for the legacy file) and
 "Unchanged" (file presence is the switch; same 401 texts in German; same
 media allowlist; same status codes 200/401/503).
 
-PRIVACY.md (English) / DATENSCHUTZ.md (German text block + operator notes;
-"describes the implementation, not legal advice"): what the browser does
-(Basic Auth credentials travel in the `Authorization` header on every request
-→ only over HTTPS; the browser stores them for the session; no cookie, no
-storage, no third party), what the server does (compares against a hash;
-stores nothing; the web server's access log may record the user name —
-hoster's log policy applies; no IP processing by Sudare), what is shown (a
-neutral 401 page), what the operator should check (HTTPS, log retention,
-tell reviewers the credentials out of band, roll the blind up on launch =
-remove the config, run `sudare-check --allow-off`).
+No privacy text: Sudare processes no visitor data. The README's Privacy section says so.
 
 ### 11.3 `examples/index.php`, `examples/htaccess.txt`
 
@@ -1142,7 +1131,7 @@ on a case-insensitive file system serves `Media/…` past the password),
 
 Everything else follows the family: composer metadata, MIT, author, support
 URLs, `scripts.test`, `config.platform.php 8.2.0`, namespace = PascalCase
-name, `src/I18n.php` + `translations/`, `README/CHANGELOG/PRIVACY/DATENSCHUTZ`,
+name, `src/I18n.php` + `translations/`, `README/CHANGELOG`,
 standalone tests + `run.sh`, `ci.yml` with the 8.2–8.4 matrix and the
 fork-PR guard, `.gitignore` with `vendor/`.
 

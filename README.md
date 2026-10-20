@@ -14,7 +14,7 @@ Preview protection for [Kirby CMS](https://getkirby.com) sites before launch: HT
 - **A contract for other packages.** `Sudare\Sudare::active()` tells site code whether the current request is behind the blind.
 - **Legacy file still works.** A site's `site/config/credentials.php` (the `vorschau` format of kirby-starter) is read as it is. See [Migration](#migration-from-vorschauschutzphp).
 - **English and German.** The 401 page, the 503 text and the CLI messages come in both languages.
-- **No cookies, no browser storage, no requests to third parties.** See [PRIVACY.md](PRIVACY.md).
+- **No cookies, no browser storage, no requests to third parties.** See [Privacy](#privacy).
 
 ## Requirements
 
@@ -392,7 +392,7 @@ The tests are standalone PHP scripts, without PHPUnit, and run on a plain PHP 8.
 
 ## Deviations from the plugin family
 
-Sudare follows the conventions of the other sayamaapps packages (Composer metadata, MIT, PHP 8.2 floor, standalone tests, `src/` with a translation table, one README, CHANGELOG, PRIVACY and DATENSCHUTZ). It deviates where the job requires it:
+Sudare follows the conventions of the other sayamaapps packages (Composer metadata, MIT, PHP 8.2 floor, standalone tests, `src/` with a translation table, one README and CHANGELOG). It deviates where the job requires it:
 
 | Convention | Sudare | Why |
 |---|---|---|
@@ -406,7 +406,7 @@ Sudare follows the conventions of the other sayamaapps packages (Composer metada
 
 ## Privacy
 
-Sudare sets no cookies, uses no browser storage and loads nothing from a third party. It does not record visitors. The technical description, in English and German, is in [PRIVACY.md](PRIVACY.md) and [DATENSCHUTZ.md](DATENSCHUTZ.md). They describe the implementation, not legal advice.
+Sudare is a tool for the people who build or edit the site. It processes no visitor data: it sets no cookies, uses no browser storage and loads nothing from a third party. Its protection is active only before launch and uses HTTP Basic Auth, so it needs HTTPS.
 
 ## Changelog
 
