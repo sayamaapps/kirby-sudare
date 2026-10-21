@@ -14,7 +14,7 @@ Preview protection for [Kirby CMS](https://getkirby.com) sites before launch: HT
 - **A contract for other packages.** `Sudare\Sudare::active()` tells site code whether the current request is behind the blind.
 - **Legacy file still works.** A site's `site/config/credentials.php` (the `vorschau` format of kirby-starter) is read as it is. See [Migration](#migration-from-vorschauschutzphp).
 - **English and German.** The 401 page, the 503 text and the CLI messages come in both languages.
-- **No cookies, no browser storage, no requests to third parties.** See [PRIVACY.md](PRIVACY.md).
+- **No cookies, no browser storage, no requests to third parties.** See [Privacy](#privacy).
 
 ## Requirements
 
@@ -31,7 +31,7 @@ composer require sayamaapps/kirby-sudare
 Until the package is on Packagist, add the repository first:
 
 ```json
-"repositories": [{ "type": "vcs", "url": "https://github.com/simsimmal/kirby-sudare" }]
+"repositories": [{ "type": "vcs", "url": "https://github.com/sayamaapps/kirby-sudare" }]
 ```
 
 The package is of Composer type `library`. It lands in `vendor/sayamaapps/kirby-sudare/`, **not** in `site/plugins/`, and it is not a Kirby plugin. It has to run before Kirby exists, so a plugin would load too late (see [Deviations from the plugin family](#deviations-from-the-plugin-family)). Make sure the deploy ships `vendor/`, as it ships `kirby/`.
@@ -105,7 +105,7 @@ return [
 |---|---|---|---|---|
 | `active` | `SUDARE_ACTIVE` | bool | `true` | `false` parks the configuration: the site is open, no headers are sent. |
 | `user` | `SUDARE_USER` | string | — | Basic Auth user name. Non-empty, no `:` (Basic Auth splits there), no control characters. Trimmed. |
-| `hash` | `SUDARE_HASH` | string | — | `password_hash()` output (bcrypt or Argon2, recognised by `password_get_info()`), or a full bcrypt hash with the `$2a$`/`$2b$` prefix as python-bcrypt and htpasswd write it. Surrounding whitespace is trimmed. Never a plain password. Must not contain `ERSETZEN` or `REPLACE` (the template's example). |
+| `hash` | `SUDARE_HASH` | string | — | `password_hash()` output (bcrypt or Argon2), or a bcrypt hash with the `$2a$`/`$2b$` prefix as python-bcrypt and htpasswd write it. Every bcrypt hash must have its full 60-character shape (cost 04–31, bcrypt alphabet) and an Argon2 hash its well-formed encoded form; a damaged hash makes the configuration `broken`, never `on`. Surrounding whitespace is trimmed. Never a plain password. Must not contain `ERSETZEN` or `REPLACE` (the template's example). |
 | `realm` | `SUDARE_REALM` | string | `Preview` (`Vorschau` for the legacy file) | Text in the browser's login dialog. Sanitised: quotes, backslashes and line breaks are removed. |
 | `token` | `SUDARE_TOKEN` | string | `null` | **Hash** of a machine token (`password_hash()` of the random token). See [Machine token](#machine-token). |
 | `exempt` | `SUDARE_EXEMPT` | list of entries | `[]` | Paths that pass without credentials: `/path` (that path only), `/path/*` (and below), each optionally with a method (`POST /path`). `/.well-known/acme-challenge` is always exempt. See [Exemptions](#exemptions). |
@@ -214,11 +214,11 @@ Rows 2 and 4 apply only to a path **as sent**: no `.` or `..` segment, no double
 |---|---|
 | `X-Robots-Tag` | `noindex, nofollow, noarchive` |
 | `Cache-Control` | `private, no-store` |
-| `Vary` | `Authorization` |
+| `Vary` | `Authorization, X-Sudare-Token` |
 
 The 401 adds `WWW-Authenticate: Basic realm="…", charset="UTF-8"`. The 503 adds `Retry-After: 300`. Files under `media/` and `assets/` carry their own cache headers (see below). While the state is `none` or `off`, Sudare sends no header at all.
 
-On a request that passes, Sudare sends these headers before Kirby runs, and Kirby may replace one of them: the Panel and the API send their own `Vary: Cookie`. `Cache-Control: private, no-store` stays, so shared caches still keep nothing.
+On a request that passes, Sudare sends these headers before Kirby runs and **seals** them again when PHP sends the response. Kirby and its plugins replace headers by name, and a plugin route may answer with `Cache-Control: public, max-age=2592000` (a thumbnail route does). At the seal, `Cache-Control` and `X-Robots-Tag` are set again and replace whatever Kirby or a plugin set: that route's `public, max-age=…`, the Panel's and the API's own values. `Vary` is merged, not replaced: the Panel's `Vary: Cookie` becomes `Vary: Cookie, Authorization, X-Sudare-Token`. `Vary` names the token header too, so a shared cache keeps an answer for a request with `X-Sudare-Token` apart from an anonymous one. Other headers of Kirby (`Content-Type`, `X-Content-Type-Options`, …) are left alone. Sudare's own answers (401, 503, 204, files) need no seal, and with the state `none` or `off` there is none.
 
 **Passwords.** User and password are checked in constant time: the user names are compared as SHA-256 digests, and the password is always verified, even for a wrong user, so both cost the same time. Matching is case-sensitive.
 
@@ -238,7 +238,9 @@ On a request that passes, Sudare sends these headers before Kirby runs, and Kirb
 |---|---|
 | `Sudare\Sudare::guard($base, $public = null, $server = null, $env = null)` | Decides, sends the headers and exits unless the request passes. `$public` defaults to `$base/public`. |
 | `Sudare\Sudare::handle($base, $public, $server, $env)` | The same decision as a `Response`, without output and without exit. Remembers the configuration. |
-| `Sudare\Sudare::emit($response)` | Sends a `Response`: its headers, and the status and body or file unless it passes. Never exits. |
+| `Sudare\Sudare::emit($response)` | Sends a `Response`: its headers, and the status and body or file unless it passes. Never exits. A pass that has headers also registers the seal (`header_register_callback()`). |
+| `Sudare\Sudare::seal($protective)` | Sets the protective headers again, right before PHP sends the response. `emit()` registers it; no need to call it yourself. |
+| `Sudare\Sudare::sealed($protective, $sent)` | Pure: which headers `seal()` sets, from the protective ones and the lines of `headers_list()`. |
 | `Sudare\Sudare::active()` | `true` when the request of this process is behind the blind. `false` before `guard()`. |
 | `Sudare\Sudare::protects($base, $env = null)` | Stateless: would `guard($base)` protect? It reads the files and the environment of the *calling* process: in a CLI (`annai-check`, a build step) the web server's `SetEnv` or FPM `env[]` variables are not visible, so a configuration that lives only there reads as `none`. `sudare-check` has the same limit and names the variables it counts (`--env`). |
 | `Sudare\Sudare::config()` | The loaded `Config`, or `null`. |
@@ -256,13 +258,13 @@ Sudare serves these files **whether or not the site is protected**, for `GET` an
 | Header | Protected (`on`, `broken` never gets here) | `none` / `off` |
 |---|---|---|
 | `Cache-Control` under `media/` | `private, max-age=31536000` | `public, max-age=31536000` |
-| `Cache-Control` under `assets/` | `private, no-cache` | `public, no-cache` |
+| `Cache-Control` under `assets/` | `private, no-cache` | — (none; the server's rules apply) |
 | `ETag`, `Last-Modified` | from size and modification time | the same |
 | `X-Robots-Tag` | `noindex, nofollow, noarchive` | — |
-| `Vary` | `Authorization` | — |
+| `Vary` | `Authorization, X-Sudare-Token` | — |
 | `X-Content-Type-Options` | `nosniff` | `nosniff` |
 
-Kirby puts a hash into every `media/` URL that changes with the file, so a year is safe there. `assets/` URLs stay the same after a deploy: the browser asks again each time and gets a `304 Not Modified` (no body) while the file is unchanged, answered from `If-None-Match` or `If-Modified-Since`. While protected, only a reviewer's own browser may cache; shared caches may not. Apache's `mod_expires` (the starter's `.htaccess` has `ExpiresByType` rules) adds its own `Expires` and a second `Cache-Control: max-age=…` next to Sudare's: browsers follow the stricter `no-cache`, so this is harmless, but a site that wants one clean header limits `ExpiresByType` to the public deploy or drops it for `assets/`.
+Kirby puts a hash into every `media/` URL that changes with the file, so a year is safe there. `assets/` URLs stay the same after a deploy. While protected, a reviewer's browser therefore asks again each time and gets a `304 Not Modified` (no body) while the file is unchanged, answered from `If-None-Match` or `If-Modified-Since`; shared caches may not keep anything. On the open site (`none`, `off`) Sudare sends **no** `Cache-Control` for `assets/`: caching is the server's business then, exactly as if the rewrite were not there. Apache's `mod_expires` (the starter's `.htaccess` has `ExpiresByType` rules) or a versioned URL (`app.css?v=…`) decides, and the browser does not ask again on every page view. Until 1.0.0 Sudare sent `public, no-cache` here, which cost every page view of a live site one round trip per asset.
 
 **Byte ranges.** Every served file carries `Accept-Ranges: bytes`. A `GET` with one range (`Range: bytes=0-1`, `bytes=500-`, `bytes=-500`) gets `206` with `Content-Range` and only those bytes; a range that starts beyond the file gets `416`. Safari and iOS play video and audio only from a server that does this. With `If-Range`, the part is sent only when the value is the file's current `ETag` or `Last-Modified`; otherwise, and for several ranges in one header or `HEAD`, the whole file goes out. Files are streamed in chunks past any output buffer, so a video larger than `memory_limit` works too.
 
@@ -355,7 +357,7 @@ With PHP's built-in server, the router script is called for every request, real 
 composer test        # sh tests/run.sh
 ```
 
-The tests are standalone PHP scripts, without PHPUnit, and run on a plain PHP 8.2+:
+The tests are standalone PHP scripts, without PHPUnit, and run on a plain PHP 8.2+ (`KirbyHttpTest` needs Kirby from `composer install` and prints `skipped` without it):
 
 | File | Covers |
 |---|---|
@@ -367,7 +369,8 @@ The tests are standalone PHP scripts, without PHPUnit, and run on a plain PHP 8.
 | `tests/MediaTest.php` | the media and assets allowlists, traversal, symlinks, headers |
 | `tests/CliTest.php` | `sudare-hash` and `sudare-check`, both binaries |
 | `tests/SudareTest.php` | the facade in fresh PHP processes |
-| `tests/HttpTest.php` | real HTTP through PHP's built-in server: status lines and headers |
+| `tests/HttpTest.php` | real HTTP through PHP's built-in server: status lines and headers, and the seal against a stand-in for Kirby |
+| `tests/KirbyHttpTest.php` | the same server with a real Kirby: a plugin route's `public, max-age=…` against the seal |
 
 `tests/helpers.php` holds the shared helpers. `HttpTest` starts the built-in server on a free port and stops it at the end.
 
@@ -380,15 +383,16 @@ The tests are standalone PHP scripts, without PHPUnit, and run on a plain PHP 8.
 - Basic Auth sends the credentials with every request. **Use HTTPS**, and the token too: both are only as safe as the connection.
 - The file under `site/config/` is read by PHP and must not be served: the starter's `.htaccess` routes `site/` to `index.php`. Keep it out of Git (`site/config/sudare.php` in `.gitignore`).
 - Sudare sends no `Location` header and never redirects.
+- The seal of the protective headers is PHP's `header_register_callback()`. PHP keeps **one** callback per request: a site or plugin that registers its own replaces Sudare's, and the seal is gone. That code then has to set `Cache-Control`, `X-Robots-Tag` and `Vary` itself.
 - **Sudare protects what reaches PHP.** Everything the web server serves by itself bypasses it:
   - Any real file in `public/` outside `media/` and `assets/` (the starter's `.htaccess` sends only missing files to `index.php`). Keep `public/` free of other static files, or add a rewrite for them.
   - A rewrite that matches only lower-case `media/`: on a case-insensitive file system (macOS, Windows/NTFS) Apache finds `Media/…` on disk and serves it past the password. The rules in [`examples/htaccess.txt`](examples/htaccess.txt) carry `[NC]` for that reason; check a site's own `.htaccess`.
   - A host whose front server (the hosting panel's nginx with "serve static files directly", a CDN) answers existing files before Apache runs: then `media/**` and `assets/**` never see `.htaccess`. Neither `sudare-check` nor the tests can see this — **after every first deploy, request an existing media file without credentials; the answer must be 401**, not the file. In the hosting panel, switch "Serve static files directly by nginx" off for a preview. On a plain nginx + FPM server the usual Kirby block (`try_files $uri $uri/ /index.php?$query_string`) serves existing files itself; give `media/` and `assets/` their own `location ^~ /media/ { rewrite ^ /index.php last; }` (same for `/assets/`) so they reach PHP.
-- Hashes are bcrypt with cost 10 by default (`sudare-hash --cost=N` for more). Every authenticated request through PHP — each image, each stylesheet — verifies the password once; at cost 12 (PHP's default since 8.4) that is ~250 ms of CPU per file on a shared host, at 10 ~60–85 ms. A `Config` accepts any hash `password_get_info()` knows, so a pasted Argon2 hash works too.
+- Hashes are bcrypt with cost 10 by default (`sudare-hash --cost=N` for more). Every authenticated request through PHP — each image, each stylesheet — verifies the password once; at cost 12 (PHP's default since 8.4) that is ~250 ms of CPU per file on a shared host, at 10 ~60–85 ms. A `Config` accepts bcrypt and Argon2 hashes, so a pasted Argon2 hash works too. It checks their shape (bcrypt: all 60 characters, cost 04–31; Argon2: the well-formed encoded form) without verifying anything, because `password_get_info()` looks only at prefix and length; a hash damaged while editing or copying is `broken` (503), not a login that answers 401.
 
 ## Deviations from the plugin family
 
-Sudare follows the conventions of the other sayamaapps packages (Composer metadata, MIT, PHP 8.2 floor, standalone tests, `src/` with a translation table, one README, CHANGELOG, PRIVACY and DATENSCHUTZ). It deviates where the job requires it:
+Sudare follows the conventions of the other sayamaapps packages (Composer metadata, MIT, PHP 8.2 floor, standalone tests, `src/` with a translation table, one README and CHANGELOG). It deviates where the job requires it:
 
 | Convention | Sudare | Why |
 |---|---|---|
@@ -398,11 +402,11 @@ Sudare follows the conventions of the other sayamaapps packages (Composer metada
 | Translations registered as Kirby translations | `Sudare::translations()` returns the prefixed tables for a site plugin | Cannot register before Kirby exists. |
 | Unstyled snippets, array methods | One inline-styled 401 page with a `theme` option | There is no template engine before Kirby. The page must be self-contained. |
 | `<name>_option()` reads Kirby | `sudare_option()` reads the loaded configuration (non-secret keys) | Same reason. |
-| Kirby-booting tests | No Kirby test. `HttpTest` runs PHP's built-in server with a stand-in for Kirby | Kirby is irrelevant to the behaviour. `getkirby/cms` stays a dev dependency, so a later handover test is possible. |
+| Kirby-booting tests | One Kirby test, `KirbyHttpTest`; the rest runs PHP's built-in server with a stand-in for Kirby | Kirby is irrelevant to the decision, but not to the seal, which has to hold against Kirby's own responses. `getkirby/cms` is a dev dependency only. |
 
 ## Privacy
 
-Sudare sets no cookies, uses no browser storage and loads nothing from a third party. It does not record visitors. The technical description, in English and German, is in [PRIVACY.md](PRIVACY.md) and [DATENSCHUTZ.md](DATENSCHUTZ.md). They describe the implementation, not legal advice.
+Sudare is a tool for the people who build or edit the site. It processes no visitor data: it sets no cookies, uses no browser storage and loads nothing from a third party. Its protection is active only before launch and uses HTTP Basic Auth, so it needs HTTPS.
 
 ## Changelog
 

@@ -8,9 +8,74 @@ All notable changes to this project are documented here. Versions follow
   A site would be indexed, cached or unprotected after a routine update.
 - **A change to the status codes** of the decision table (401, 503, 204, 200)
   or to the allowlists of `Media` is a **major** version as well.
-- **A change to the privacy text** (`DATENSCHUTZ.md` / `PRIVACY.md`) is marked
-  **[privacy text]**. Every site using the package must then review its privacy
-  policy.
+
+## [Unreleased]
+
+### Removed
+
+- **`DATENSCHUTZ.md` and `PRIVACY.md`.** Sudare processes no visitor data, so it has no place in a site's privacy policy. The README says so under "Privacy".
+
+## [2.1.1] — 2026-10-17
+
+### Fixed
+
+- **A damaged `$2y$` hash is a broken configuration, not a working one.** A
+  `$2y$` hash damaged when the configuration was edited or copied (a cost
+  outside 04–31, a character outside the bcrypt alphabet) was accepted as
+  valid, because `password_get_info()` checks only the prefix and the length
+  of a bcrypt hash. The preview was `on`, `sudare-check` exited 0, the deploy
+  gate let it through, and every login answered 401. Now `Config::isHash()`
+  checks every bcrypt prefix (`$2a$`, `$2b$`, `$2x$`, `$2y$`) for the full
+  shape and an Argon2 hash for its encoded form, by syntax only, before
+  anything is verified. Such a configuration is `broken` (503,
+  `sudare-check` exit 2, reason `hash` or `token`), as the same damage with a
+  `$2a$` or `$2b$` prefix already was. The reason texts for `hash` and `token`
+  now say "not a complete password hash" instead of "not a hash PHP
+  recognises", which was exactly the misleading part. Valid hashes are
+  unchanged.
+
+## [2.1.0] — 2026-10-17
+
+### Fixed
+
+- **The protective headers are sealed when PHP sends the response.** Sudare
+  sent `Cache-Control: private, no-store` before Kirby ran, and Kirby's own
+  response then replaced it by name: a plugin route that answers with
+  `Cache-Control: public, max-age=2592000` (a thumbnail route, say) left the
+  preview with a public cache header, and a shared cache in front of it served
+  the protected bytes to anonymous requests. `X-Robots-Tag` could be replaced
+  the same way. Now `guard()` registers `header_register_callback()`, and
+  `Sudare::seal()` sets `Cache-Control` and `X-Robots-Tag` again right before
+  PHP sends the headers, whatever Kirby or a plugin set in between. `Vary` is
+  merged, not replaced: the Panel's `Vary: Cookie` becomes
+  `Vary: Cookie, Authorization, X-Sudare-Token`. Sudare's own answers (401,
+  503, 204, files) and a site without a configuration are unchanged. PHP keeps
+  one such callback per request: a site or plugin that registers its own
+  replaces the seal and has to set the headers itself.
+- **`Vary` names `X-Sudare-Token` as well** (`Vary: Authorization,
+  X-Sudare-Token`). A request authenticated by the token header was the same
+  cache variant as an anonymous one; now a token-authenticated answer and an
+  anonymous one are different variants.
+
+The value of a protective header changes (`Vary` gains a value), which the
+rules above call a major version. This is a minor version on purpose: nothing
+is weakened, and sites pin `^2.0`, so a 3.0.0 would not reach them with a
+routine update.
+
+## [2.0.0] — 2026-10-17
+
+### Changed — protective header (major by the rules above)
+
+- **No `Cache-Control` for `assets/` on the open site** (`none`, `off`). Sudare
+  sent `public, no-cache`, which overruled the server's own caching rules
+  (`mod_expires`, versioned URLs) for every live site that keeps the
+  `assets/` rewrite: the browser re-requested CSS, JavaScript, fonts and
+  images on every page view and got a 304 each time. Now the server decides,
+  as if the rewrite were not there. Protected sites are unchanged
+  (`private, no-cache`), `media/` is unchanged (a year, the URLs are hashed).
+  After updating, an asset under `assets/` whose URL carries no version may
+  stay in browsers for as long as the server's rules allow; give such URLs a
+  version (`?v=…`) or a shorter `ExpiresByType`.
 
 ## [1.0.0] — 2026-10-12
 

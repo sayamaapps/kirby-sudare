@@ -12,7 +12,7 @@
         "noindex",
         "access-control"
     ],
-    "homepage": "https://github.com/simsimmal/kirby-sudare",
+    "homepage": "https://github.com/sayamaapps/kirby-sudare",
     "authors": [
         {
             "name": "Simon Räder",
@@ -20,8 +20,8 @@
         }
     ],
     "support": {
-        "issues": "https://github.com/simsimmal/kirby-sudare/issues",
-        "source": "https://github.com/simsimmal/kirby-sudare"
+        "issues": "https://github.com/sayamaapps/kirby-sudare/issues",
+        "source": "https://github.com/sayamaapps/kirby-sudare"
     },
     "require": {
         "php": "^8.2",

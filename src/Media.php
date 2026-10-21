@@ -134,18 +134,23 @@ final class Media
         $modified = gmdate('D, d M Y H:i:s', $mtime) . ' GMT';
 
         // Kirby's media/ URLs carry a hash that changes with the file, so a
-        // year is safe. assets/ URLs do not: the browser asks again each time
-        // and gets a 304 while the file is unchanged.
-        $age = str_starts_with($request->path(), '/media/') ? 'max-age=' . self::MAX_AGE : 'no-cache';
-        // While the blind is down, shared caches (company proxy, CDN) must not
-        // keep the file; once the site is public, that is exactly what we want.
-        $headers = $config->protects()
-            ? [
-                'Cache-Control' => 'private, ' . $age,
+        // year is safe. assets/ URLs do not: while the blind is down, the
+        // reviewer's browser asks again each time and gets a 304 while the
+        // file is unchanged, and shared caches (company proxy, CDN) must not
+        // keep anything. On the open site Sudare sends no Cache-Control for
+        // assets/ at all: caching is the server's business then, as if the
+        // rewrite were not there (mod_expires rules, a versioned URL). A
+        // `no-cache` here cost every page view one round trip per asset.
+        $media = str_starts_with($request->path(), '/media/');
+        if ($config->protects()) {
+            $headers = [
+                'Cache-Control' => 'private, ' . ($media ? 'max-age=' . self::MAX_AGE : 'no-cache'),
                 'X-Robots-Tag'  => Guard::ROBOTS,
-                'Vary'          => 'Authorization',
-            ]
-            : ['Cache-Control' => 'public, ' . $age];
+                'Vary'          => Guard::VARY,
+            ];
+        } else {
+            $headers = $media ? ['Cache-Control' => 'public, max-age=' . self::MAX_AGE] : [];
+        }
         $headers['X-Content-Type-Options'] = 'nosniff';
         $headers['ETag'] = $etag;
         $headers['Last-Modified'] = $modified;

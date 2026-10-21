@@ -187,7 +187,7 @@ holds($protected !== null, 'protected: webp served');
 if ($protected !== null) {
     expect('private, max-age=31536000', $protected->header('Cache-Control'), 'protected: Cache-Control private');
     expect('noindex, nofollow, noarchive', $protected->header('X-Robots-Tag'), 'protected: X-Robots-Tag');
-    expect('Authorization', $protected->header('Vary'), 'protected: Vary Authorization');
+    expect('Authorization, X-Sudare-Token', $protected->header('Vary'), 'protected: Vary names Authorization and the token header');
     expect('nosniff', $protected->header('X-Content-Type-Options'), 'protected: nosniff');
     expect('image/webp', $protected->header('Content-Type'), 'protected: Content-Type');
     expect((string) strlen('CONTENT media/pages/p/image.webp'), $protected->header('Content-Length'), 'protected: Content-Length is the byte count');
@@ -262,7 +262,12 @@ touch($public . '/assets/app.js', 1700000000);
 $etag = '"' . dechex(strlen('console.log(1)')) . '-' . dechex(1700000000) . '"';
 $lastModified = 'Tue, 14 Nov 2023 22:13:20 GMT';
 $js = serveUrl('/assets/app.js', $none);
-expect(['public, no-cache', $etag, $lastModified], [$js?->header('Cache-Control'), $js?->header('ETag'), $js?->header('Last-Modified')], 'assets: no-cache with ETag and Last-Modified (URLs are not hashed)');
+// Open site: no Cache-Control from Sudare at all — the server's rules apply, as
+// if the rewrite were not there. `public, no-cache` (until 1.0.0) made every
+// page view of a live site re-request each asset.
+expect([null, $etag, $lastModified], [$js?->header('Cache-Control'), $js?->header('ETag'), $js?->header('Last-Modified')], 'assets open: no Cache-Control, ETag and Last-Modified stay');
+expect([null, 'nosniff'], [serveUrl('/assets/app.js', Config::fromArray(['active' => false]))?->header('Cache-Control'), serveUrl('/assets/app.js', Config::fromArray(['active' => false]))?->header('X-Content-Type-Options')], 'assets off: no Cache-Control either, nosniff stays');
+expect(null, $withServer('/assets/app.js', ['HTTP_IF_NONE_MATCH' => $etag], $none)?->header('Cache-Control'), 'assets open 304: no Cache-Control either');
 expect('private, no-cache', serveUrl('/assets/app.js', $on)?->header('Cache-Control'), 'assets protected: private, no-cache');
 expect('public, max-age=31536000', serveUrl('/media/pages/p/image.webp', $none)?->header('Cache-Control'), 'media: a year (Kirby hashes the URLs)');
 holds(serveUrl('/media/pages/p/image.webp', $none)?->header('ETag') !== null, 'media: ETag too');

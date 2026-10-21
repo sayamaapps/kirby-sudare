@@ -451,20 +451,47 @@ final class Config
     /* -------------------------------------------------------------- validation */
 
     /**
-     * PHP recognises it as one of its password hashes (bcrypt, argon2…), or
-     * it is a bcrypt hash with the `$2a$`/`$2b$`/`$2x$` prefix (python-bcrypt,
-     * some htpasswd builds): password_verify() accepts those through crypt(),
-     * password_get_info() does not know them (round 2m). Never a bare prefix
-     * test: the full 60-character shape is required.
+     * Whether a string has the shape of a password hash, judged by syntax only.
+     *
+     * password_get_info() checks just the prefix and, for bcrypt, the length:
+     * any 60-character string starting with `$2y$` is "bcrypt" to it, cost
+     * `99` or a `!` in the salt included. A hash damaged while the
+     * configuration was edited or copied must be `broken` (503, "configuration
+     * broken"), not `on` with every login answering 401. So:
+     *
+     * - `$2…`: the full bcrypt shape for every prefix password_verify()
+     *   accepts (`$2a$`, `$2b$`, `$2x$`, `$2y$`): cost 04–31, then 22 salt and
+     *   31 hash characters of the bcrypt alphabet, 60 characters in all. Never
+     *   a bare prefix test, whatever password_get_info() says.
+     * - `$argon2…`: the encoded form (`m=,t=,p=`, salt, hash in base64) and
+     *   a PHP that knows Argon2, so a build without it still fails closed.
+     * - anything else: what password_get_info() recognises.
+     *
+     * Regular expressions only, never password_verify() or crypt(): those
+     * would take years for a well-formed cost-31 hash. `D` on the patterns,
+     * so a trailing newline is not part of a hash; isHash() does not trim,
+     * fromArray() does before it asks. A hash with the right shape that is
+     * the hash of nothing simply fails at login.
      */
     public static function isHash(string $hash): bool
     {
-        return (password_get_info($hash)['algoName'] ?? 'unknown') !== 'unknown' || self::isForeignBcrypt($hash);
+        if (str_starts_with($hash, '$2')) {
+            return self::isBcrypt($hash);
+        }
+        $known = (password_get_info($hash)['algoName'] ?? 'unknown') !== 'unknown';
+        return str_starts_with($hash, '$argon2') ? self::isArgon2($hash) && $known : $known;
     }
 
-    private static function isForeignBcrypt(string $hash): bool
+    /** The encoded Argon2 form; `v=` is optional (older encodings), the lengths are not checked. */
+    private static function isArgon2(string $hash): bool
     {
-        return preg_match('#^\$2[abx]\$(?:0[4-9]|[12][0-9]|3[01])\$[./A-Za-z0-9]{53}$#', $hash) === 1;
+        return preg_match('#^\$argon2id?\$(?:v=\d+\$)?m=\d+,t=\d+,p=\d+\$[A-Za-z0-9+/]+\$[A-Za-z0-9+/]+$#D', $hash) === 1;
+    }
+
+    /** The full bcrypt shape, any prefix password_verify() takes (python-bcrypt writes `$2b$`, some htpasswd builds `$2a$`/`$2x$`). */
+    private static function isBcrypt(string $hash): bool
+    {
+        return preg_match('#^\$2[abxy]\$(?:0[4-9]|[12][0-9]|3[01])\$[./A-Za-z0-9]{53}$#D', $hash) === 1;
     }
 
     private static function readLanguage(array $raw, string $default): string
@@ -727,8 +754,10 @@ final class Config
         if ($this->hash === null) {
             return null;
         }
-        $name = password_get_info($this->hash)['algoName'] ?? 'unknown';
-        return $name !== 'unknown' ? $name : (self::isForeignBcrypt($this->hash) ? 'bcrypt' : null);
+        if (!self::isHash($this->hash)) {
+            return null;
+        }
+        return str_starts_with($this->hash, '$2') ? 'bcrypt' : password_get_info($this->hash)['algoName'];
     }
 
     /**

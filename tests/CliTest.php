@@ -210,8 +210,22 @@ holds(str_contains($out, 'configuration valid') && str_contains($out, 'credentia
 $plain = cliRoot('sudare.php', "<?php return ['user' => 'test', 'hash' => 'plain-password-here'];");
 [$code, $out, $err] = cliCheck([$plain]);
 expect(Cli::EXIT_BROKEN, $code, 'check: broken configuration exits 2');
-holds(str_contains($out, 'PHP recognises'), 'check: broken reason text');
+holds(str_contains($out, 'complete password hash'), 'check: broken reason text');
 holds(!str_contains($out . $err, 'plain-password-here') && !str_contains($out . $err, '$2y$'), 'check: no secret in broken output');
+
+// A damaged $2y$ hash (cost 99) has the right prefix and length, so
+// password_get_info() takes it: the gate must still stop it.
+$cost99 = substr_replace(sudare_hash(), '99', 4, 2);
+$damagedHash = cliRoot('sudare.php', "<?php return ['user' => 'test', 'hash' => " . var_export($cost99, true) . "];");
+[$code, $out, $err] = cliCheck([$damagedHash]);
+expect(Cli::EXIT_BROKEN, $code, 'check: a $2y$ hash with cost 99 exits 2');
+holds(str_contains($out, '"hash" is not a complete password hash'), 'check: damaged hash names the reason hash');
+holds(!str_contains($out . $err, $cost99), 'check: damaged hash never printed');
+$damagedToken = cliRoot('sudare.php', "<?php return ['user' => 'test', 'hash' => " . var_export(sudare_hash(), true) . ", 'token' => " . var_export($cost99, true) . "];");
+[$code, $out, $err] = cliCheck([$damagedToken]);
+expect(Cli::EXIT_BROKEN, $code, 'check: a $2y$ token with cost 99 exits 2');
+holds(str_contains($out, '"token" is set but'), 'check: damaged token names the reason token');
+holds(!str_contains($out . $err, $cost99), 'check: damaged token never printed');
 
 [$code, $out] = cliCheck([$plain], ['GITHUB_ACTIONS' => 'true']);
 holds(str_starts_with($out, '::error::') && $code === Cli::EXIT_BROKEN, 'check: GITHUB_ACTIONS annotates a broken configuration');

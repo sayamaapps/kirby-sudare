@@ -4,6 +4,9 @@
  * Real HTTP through PHP's built-in server (SPEC.md §10.8): status lines and
  * headers as a browser sees them. The router is a two-line stand-in for
  * Kirby: it runs guard(), then prints "KIRBY active" or "KIRBY inactive".
+ * With the query `override=1` it also sets the three protective headers to
+ * other values after guard() — what Kirby or a plugin route does — and the
+ * seal (Sudare::seal(), registered by guard()) must put them back.
  *
  * The configuration is read per request, so most scenarios rewrite the
  * config file between requests. Environment-only and legacy scenarios need
@@ -24,6 +27,11 @@ sudare_write($router, "<?php\n"
     . "\$base = dirname(__DIR__);\n"
     . 'require ' . var_export($package . '/bootstrap.php', true) . ";\n"
     . "Sudare\\Sudare::guard(\$base);\n"
+    . "if ((\$_GET['override'] ?? '') === '1') {\n"
+    . "    header('Cache-Control: public, max-age=2592000');\n"
+    . "    header('Vary: Cookie');\n"
+    . "    header('X-Robots-Tag: all');\n"
+    . "}\n"
     . "header('X-Kirby: yes');\n"
     . "echo 'KIRBY ', Sudare\\Sudare::active() ? 'active' : 'inactive';\n");
 
@@ -32,7 +40,7 @@ $auth = ['Authorization' => 'Basic ' . base64_encode('preview:' . $password)];
 $protective = [
     'x-robots-tag'  => 'noindex, nofollow, noarchive',
     'cache-control' => 'private, no-store',
-    'vary'          => 'Authorization',
+    'vary'          => 'Authorization, X-Sudare-Token',
 ];
 $unavailable = "The preview is temporarily unavailable.\n";
 
@@ -63,6 +71,15 @@ $protected = function (array $response) use ($protective): void {
     foreach ($protective as $name => $value) {
         expect($value, $response['headers'][$name] ?? null, "protective header $name");
     }
+};
+/** The answer to `?override=1`: Kirby's own header is there, the protective ones are sealed over what it set. */
+$sealed = function (array $response, string $what): void {
+    expect(200, $response['status'], "$what: status 200");
+    expect('KIRBY active', $response['body'], "$what: reaches \"Kirby\"");
+    expect('yes', $response['headers']['x-kirby'] ?? null, "$what: the router's own header arrives");
+    expect('private, no-store', $response['headers']['cache-control'] ?? null, "$what: cache-control sealed over public, max-age");
+    expect('Cookie, Authorization, X-Sudare-Token', $response['headers']['vary'] ?? null, "$what: vary merged, not replaced");
+    expect('noindex, nofollow, noarchive', $response['headers']['x-robots-tag'] ?? null, "$what: x-robots-tag sealed over all");
 };
 
 try {
@@ -134,6 +151,7 @@ try {
     expect('nosniff', $r['headers']['x-content-type-options'] ?? null, 'webp: x-content-type-options');
     expect('RIFFTEST', $r['body'], 'webp: body is the file');
     expect('noindex, nofollow, noarchive', $r['headers']['x-robots-tag'] ?? null, 'webp: x-robots-tag');
+    expect('Authorization, X-Sudare-Token', $r['headers']['vary'] ?? null, 'webp: vary names the token header too');
 
     $r = $request('HEAD', '/media/pages/p/img.webp', $auth);
     expect(200, $r['status'], 'webp HEAD with credentials: status 200');
@@ -211,6 +229,34 @@ try {
         expect(401, $r['status'], "exempt only after resolving, $path: status 401");
         holds(!isset($r['headers']['x-kirby']), "exempt only after resolving, $path: Kirby not reached");
     }
+
+    /* 8a. Kirby or a plugin replaces the protective headers after guard(): the seal puts them back */
+    sudare_config($root, [
+        'user'   => 'preview',
+        'hash'   => sudare_hash($password),
+        'token'  => sudare_hash('machine-token-123'),
+        'exempt' => ['/api/hook'],
+    ]);
+    $sealed($request('GET', '/?override=1', $auth), 'override, Basic Auth');
+    $sealed($request('GET', '/?override=1', ['X-Sudare-Token' => 'machine-token-123']), 'override, token');
+    $sealed($request('GET', '/api/hook?override=1'), 'override, exempt path without credentials');
+    $r = $request('GET', '/?override=1');
+    expect(401, $r['status'], 'override, no credentials: status 401');
+    holds(!isset($r['headers']['x-kirby']), 'override, no credentials: the router is not reached');
+    $protected($r);
+
+    // Sudare off or not configured: no seal, the site's own headers stand.
+    $open = function (array $r, string $what): void {
+        expect(200, $r['status'], "$what: status 200");
+        expect('KIRBY inactive', $r['body'], "$what: reaches \"Kirby\", Sudare inactive");
+        expect('public, max-age=2592000', $r['headers']['cache-control'] ?? null, "$what: the site's cache-control stands");
+        expect('Cookie', $r['headers']['vary'] ?? null, "$what: the site's vary stands");
+        expect('all', $r['headers']['x-robots-tag'] ?? null, "$what: the site's x-robots-tag stands");
+    };
+    sudare_config($root, ['active' => false, 'user' => 'preview', 'hash' => sudare_hash($password)]);
+    $open($request('GET', '/?override=1'), 'override, state off');
+    unlink($configFile);
+    $open($request('GET', '/?override=1'), 'override, no configuration');
 
     /* 9. ACME challenge: Sudare answers without credentials, Kirby never sees it */
     sudare_config($root, ['user' => 'preview', 'hash' => sudare_hash($password)]);

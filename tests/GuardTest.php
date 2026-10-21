@@ -27,7 +27,7 @@ function guardHandle(Config $config, Request $request): Response
 }
 
 $protective = Guard::headers();
-$robots = ['X-Robots-Tag' => 'noindex, nofollow, noarchive', 'Cache-Control' => 'private, no-store', 'Vary' => 'Authorization'];
+$robots = ['X-Robots-Tag' => 'noindex, nofollow, noarchive', 'Cache-Control' => 'private, no-store', 'Vary' => 'Authorization, X-Sudare-Token'];
 
 $on = Config::fromArray(['user' => 'test', 'hash' => sudare_hash(), 'token' => sudare_hash('tok'), 'exempt' => ['/api/hook']]);
 $legacy = Config::fromArray(['user' => 'test', 'hash' => sudare_hash(), 'language' => 'de']);
@@ -45,7 +45,7 @@ $pass = static fn (array $headers) => ['status' => 200, 'headers' => $headers];
 /* ---------------------------------------------------------------- headers */
 
 expect(
-    ['X-Robots-Tag' => 'noindex, nofollow, noarchive', 'Cache-Control' => 'private, no-store', 'Vary' => 'Authorization'],
+    ['X-Robots-Tag' => 'noindex, nofollow, noarchive', 'Cache-Control' => 'private, no-store', 'Vary' => 'Authorization, X-Sudare-Token'],
     Guard::headers(),
     'headers: exact array'
 );
@@ -68,7 +68,7 @@ expect(Page::unavailable($broken), $r->body(), 'broken, GET /: body is Page::una
 expect('text/plain; charset=utf-8', $r->header('Content-Type'), 'broken: text/plain');
 expect('noindex, nofollow, noarchive', $r->header('X-Robots-Tag'), 'broken: X-Robots-Tag');
 expect('private, no-store', $r->header('Cache-Control'), 'broken: Cache-Control');
-expect('Authorization', $r->header('Vary'), 'broken: Vary');
+expect('Authorization, X-Sudare-Token', $r->header('Vary'), 'broken: Vary names the token header too');
 expect('300', $r->header('Retry-After'), 'broken: Retry-After 300');
 holds(!str_contains($r->body(), '$2y$'), 'broken: body has no hash');
 holds(!str_contains($r->body(), 'hash'), 'broken: body has no word hash');
