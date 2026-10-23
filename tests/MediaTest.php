@@ -1,6 +1,6 @@
 <?php
 // Media: files under public/media and public/assets served through PHP.
-// Port of kirby-starter tests/PanelMedienTest.php (all 14 cases) plus the
+// Port of the original media tests (all 14 cases) plus the
 // assets/ cases, traversal, dotfiles, symlinks and the header matrix of
 // SPEC.md §8.3.
 
@@ -115,7 +115,7 @@ holds(serveUrl('/media/../site/config/x.webp', $none) === null, 'traversal to a 
 holds(serveUrl('/media/%2e%2e/site/config/x.webp', $none) === null, 'encoded traversal to a webp outside media');
 holds(serveUrl('/.htaccess', $none) === null, 'root dotfile is not ours');
 
-// Round 2l: realpath() on a planted symlink that points outside open_basedir
+// realpath() on a planted symlink that points outside open_basedir
 // warns; a site's handler that throws on warnings must not make that a 500,
 // and the warning (with both paths) must not reach the output. Root sees no
 // open_basedir difference for permissions, but the warning is PHP's own, so
@@ -143,7 +143,7 @@ if (function_exists('symlink')) {
     holds(true, 'open_basedir symlink: skipped (no symlink())');
 }
 
-// Round 2j: a file PHP may not read is not served either — fopen() would
+// A file PHP may not read is not served either — fopen() would
 // fail after the headers, and the client would cache an empty 200 under the
 // file's ETag (and get 304 for it from then on).
 if (function_exists('posix_geteuid') && posix_geteuid() !== 0) {
@@ -250,12 +250,12 @@ $withServer = static fn (string $url, array $server, Config $config): ?Response 
     Request::fromServer(['REQUEST_URI' => $url] + $server),
     $config
 );
-// Round 2e: a GET overridden to POST is what Kirby routes as POST; its media
+// A GET overridden to POST is what Kirby routes as POST; its media
 // routes take GET only, so the file is not Sudare's to serve (a "POST /assets/*"
 // entry would otherwise hand out the whole file without a login).
 expect(null, $withServer('/assets/clip.mp4', ['HTTP_X_HTTP_METHOD_OVERRIDE' => 'POST'], $none), 'respond: GET overridden to POST: no file, Kirby routes it');
 holds($withServer('/assets/clip.mp4', ['HTTP_X_HTTP_METHOD_OVERRIDE' => 'HEAD'], $none) !== null, 'respond: GET overridden to HEAD is still a read');
-// Round 2g: Kirby routes PROPFIND as GET; the file, not Kirby's error page.
+// Kirby routes PROPFIND as GET; the file, not Kirby's error page.
 holds($withServer('/assets/clip.mp4', ['REQUEST_METHOD' => 'PROPFIND'], $none)?->filePath() !== null, 'respond: PROPFIND (routed GET) gets the file');
 sudare_write($public . '/assets/app.js', 'console.log(1)');
 touch($public . '/assets/app.js', 1700000000);

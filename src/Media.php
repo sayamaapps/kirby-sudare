@@ -12,7 +12,7 @@ namespace Sudare;
  * no header(), no exit, no $_SERVER. Everything not on the allowlists returns
  * null and Kirby decides (usually a 404).
  *
- * Ported from site/config/vorschauschutz.php (vorschauMedien) of kirby-starter.
+ * Ported from the per-site preview guard (`vorschauMedien()`) that preceded this package.
  */
 final class Media
 {
@@ -283,7 +283,7 @@ final class Media
      * symlink that points outside open_basedir warns, and a site's handler
      * set before guard() may throw on every warning (500) or let the warning
      * with both paths into the output (display_errors on). Same reason as
-     * Config::load() (round 2j); found missing here in round 2l.
+     * Config::load().
      */
     private static function quietly(callable $check): mixed
     {

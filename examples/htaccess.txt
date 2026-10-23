@@ -1,8 +1,8 @@
 # Lines for public/.htaccess of a Sudare site. Only the lines the site adds or
-# keeps; everything else of the starter's .htaccess stays as it is.
+# keeps; everything else of the existing .htaccess stays as it is.
 
-# Generated media (thumbnails, uploads) goes through index.php, so Sudare checks the password first. Already in kirby-starter —
-# there without [NC]: on a case-insensitive file system (macOS, Windows/NTFS) Apache finds "Media/…" on disk and serves it
+# Generated media (thumbnails, uploads) goes through index.php, so Sudare checks the password first.
+# Without [NC]: on a case-insensitive file system (macOS, Windows/NTFS) Apache finds "Media/…" on disk and serves it
 # past the password unless the rule matches regardless of case. [NC] costs nothing on Linux.
 RewriteRule ^media/(.*) index.php [NC,L]
 
@@ -19,7 +19,7 @@ CGIPassAuth On
 # PHP response unless this is set, so media files arrive chunked and HEAD has no size. Kirby sets no wrong lengths.
 SetEnv ap_trust_cgilike_cl 1
 
-# Only if the site has a Content-Security-Policy with style-src 'self' (kirby-starter has one): the 401 page's
+# Only if the site has a Content-Security-Policy with style-src 'self': the 401 page's
 # colours are one inline <style>. vendor/bin/sudare-check prints its hash; add it to style-src, e.g.
 #   style-src 'self' 'sha256-…';
 # Without it the 401 page shows unstyled, which is harmless.

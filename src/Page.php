@@ -36,7 +36,7 @@ final class Page
 
     /**
      * The CSP source that allows exactly this <style> element, for sites whose
-     * Content-Security-Policy says `style-src 'self'` (the starter's does):
+     * Content-Security-Policy says `style-src 'self'`:
      * without it the browser drops the colours and only `chrome` remains.
      */
     public static function styleSource(Config $config): string

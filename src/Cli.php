@@ -35,7 +35,7 @@ final class Cli
      * to 12 with 8.4; here every authenticated request — each image, each
      * stylesheet served through PHP — pays one verify, and on a shared host
      * cost 12 is ~250 ms of CPU per file against ~60–85 ms at 10 (measured
-     * on Apache+FPM, round 2k). 10 is bcrypt's long-standing recommendation
+     * on Apache+FPM). 10 is bcrypt's long-standing recommendation
      * for interactive logins; `--cost` raises it for a site that wants more.
      */
     public const DEFAULT_COST = 10;

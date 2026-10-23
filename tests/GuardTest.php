@@ -153,16 +153,16 @@ expect(401, guardHandle($scoped, guardReq('/pay/hook', 'POST', ['HTTP_X_HTTP_MET
 expect(401, guardHandle($scoped, guardReq('/health', 'GET', ['HTTP_X_HTTP_METHOD_OVERRIDE' => 'DELETE']))->status(), 'GET entry, GET overridden to DELETE: 401');
 holds(guardHandle($scoped, guardReq('/pay/hook', 'POST', ['HTTP_X_HTTP_METHOD_OVERRIDE' => 'BOGUS']))->passes(), 'an override Kirby ignores changes nothing');
 expect(401, guardHandle($scoped, guardReq('/pay/hook', 'GET', ['HTTP_X_HTTP_METHOD_OVERRIDE' => ' POST ']))->status(), 'GET with override " POST ": Kirby routes GET, 401');
-// Strict since 11.10. (Simon): an entry with a method needs it as routed AND as sent.
+// Strict: an entry with a method needs it as routed AND as sent.
 expect(401, guardHandle($scoped, guardReq('/pay/hook', 'GET', ['HTTP_X_HTTP_METHOD_OVERRIDE' => 'POST']))->status(), 'GET overridden to POST: 401 (entry needs POST as sent too)');
 holds(guardHandle($scoped, guardReq('/pay/hook', 'POST', ['HTTP_X_HTTP_METHOD_OVERRIDE' => 'POST']))->passes(), 'POST with override POST: passes');
 expect(401, guardHandle($scoped, guardReq('/pay/hook', 'post'))->status(), 'lower-case "post" as sent: 401 (not the method of the entry)');
 expect(401, guardHandle($scoped, guardReq('/health', 'PROPFIND'))->status(), 'GET entry: PROPFIND (Kirby routes GET) is 401');
-// Round 2e: a HEAD entry needs a real HEAD; a GET overridden to HEAD gets the body.
+// A HEAD entry needs a real HEAD; a GET overridden to HEAD gets the body.
 $headOnly = Config::fromArray(['user' => 'test', 'hash' => sudare_hash(), 'exempt' => ['HEAD /probe']]);
 holds(guardHandle($headOnly, guardReq('/probe', 'HEAD'))->passes(), 'HEAD entry: a real HEAD passes');
 expect(401, guardHandle($headOnly, guardReq('/probe', 'GET', ['HTTP_X_HTTP_METHOD_OVERRIDE' => 'HEAD']))->status(), 'HEAD entry: GET overridden to HEAD is 401');
-// Round 2f: only an exact "HEAD" loses its body; "head" is rendered in full.
+// Only an exact "HEAD" loses its body; "head" is rendered in full.
 foreach (['head', 'Head', 'hEAD', ' HEAD', 'HEAD '] as $sent) {
     expect(401, guardHandle($headOnly, guardReq('/probe', $sent))->status(), "HEAD entry: REQUEST_METHOD '$sent' is 401");
 }

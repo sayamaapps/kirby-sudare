@@ -11,32 +11,18 @@ Package `sayamaapps/kirby-sudare`, Composer type **`library`** (not
 `kirby-plugin`, see §12), namespace `Sudare`, option prefix `sudare.`,
 environment prefix `SUDARE_`, directory: this repository.
 
-It replaces `site/config/vorschauschutz.php` (byte-identical in kirby-starter
-and six client sites) and its deviating copy in one client site (themed 401 page,
-`vorschauAktiv()`), plus `scripts/hash-erzeugen.php` and
-`scripts/pruefe-zugangsdaten.php` of kirby-starter.
+It replaces the per-site preview guard that Kirby sites carried before 1.0.0
+(`site/config/vorschauschutz.php` and two helper scripts, copied into each site;
+the copies had drifted apart, one of them with a themed 401 page).
 
 This document is the contract. Section numbers are referenced from code
 comments and task prompts.
 
 ---
 
-## 0. Sources (read-only — never edit, never run git there)
+## 0. Background
 
-| What | Path |
-|---|---|
-| Original guard (6 sites) | `../kirby-starter/site/config/vorschauschutz.php` |
-| Deviating copy | `<client site>/site/config/vorschauschutz.php` (`vorschauAktiv()`, `vorschauThema()`, themed 401 page, viewport meta) |
-| How it is called | `../kirby-starter/public/index.php`, `<client site>/public/index.php` (cli-server branch) |
-| Apache rules | `../kirby-starter/public/.htaccess` (`RewriteRule ^media/(.*) index.php`, `CGIPassAuth On`, `SetEnvIf Authorization`) |
-| Hash tool | `../kirby-starter/scripts/hash-erzeugen.php` |
-| Deploy gate | `../kirby-starter/scripts/pruefe-zugangsdaten.php`, `tests/ZugangsdatenTest.php` |
-| Original tests | `../kirby-starter/tests/VorschauschutzTest.php` (13 cases), `tests/PanelMedienTest.php` (14 cases) |
-| Credentials in CI | `../kirby-starter/.github/workflows/deploy-vorschau.yml` (secret `CREDENTIALS_PHP` → `site/config/credentials.php`; `PREVIEW_USERNAME`/`PREVIEW_PASSWORD` → smoke test), `scripts/smoke-test.sh` (curl `-K` config file, never `-u`) |
-| Legacy config template | `../kirby-starter/site/config/credentials.example.php` |
-| Preview slots | the deploy setup (not public) |
-| Consumers of "is this a preview?" | `<client site>/site/plugins/praxis/index.php` (`site()->vorschau()`), `<client site>/site/config/config.php` (`kizami.report`, `kizami.previewAccess`) |
-| Family conventions | `../kirby-noren` (SPEC, README, CHANGELOG, tests/helpers.php), `../kirby-koe` (CLI as a testable `run()` function, `bin/koe-fetch`), `../kirby-kizami` (`bin/`) |
+Before 1.0.0 the preview guard lived as a copy in each Kirby site: `site/config/vorschauschutz.php`, plus two helper scripts for the hash and the deploy gate. The copies drifted apart. This package replaces them; the migration map is in the CHANGELOG (1.0.0).
 
 ---
 
@@ -211,11 +197,11 @@ final class Request
                                                // duplicate slashes collapsed, leading "/", no trailing "/" (except "/")
   static kirbyMethod(array $server): string     // the method Kirby routes (copy of detectRequestMethod(), §4.3 exempt)
   method(): string          // upper-case, 'GET' when missing/garbage
-  sentMethod(): string      // REQUEST_METHOD exactly as sent (rounds 2e–2g)
+  sentMethod(): string      // REQUEST_METHOD exactly as sent
   routedMethod(): string    // kirbyMethod(): X-HTTP-Method-Override honoured as Kirby does
   path(): string            // normalised, query/fragment removed
   rawPath(): string         // as sent, without query
-  isCanonical(): bool       // rawPath already in normal form: no "%", no dot/empty segment (rounds 2a–2c)
+  isCanonical(): bool       // rawPath already in normal form: no "%", no dot/empty segment
   credentials(): ?array     // ['user' => string, 'password' => string] from PHP_AUTH_USER/PW,
                             // else from HTTP_AUTHORIZATION / REDIRECT_HTTP_AUTHORIZATION "Basic base64(user:pass)";
                             // null when absent or malformed (bad base64, no colon)
@@ -342,7 +328,7 @@ final class Sudare
 
 Annai (and any site code) asks:
 `class_exists(\Sudare\Sudare::class) && \Sudare\Sudare::active()`.
-A client site's `vorschauAktiv($basis)` becomes `\Sudare\Sudare::active()` (after
+A site's `vorschauAktiv($basis)` call becomes `\Sudare\Sudare::active()` (after
 `guard()`) or `\Sudare\Sudare::protects($base)` (anywhere).
 
 ---
@@ -397,12 +383,12 @@ and the presence of the file has always been the switch).
 |---|---|---|---|---|
 | `active` | `SUDARE_ACTIVE` | bool | `true` | `false` parks the configuration: site open, no headers. |
 | `user` | `SUDARE_USER` | string | — | Basic Auth user. Non-empty, no `:` (Basic Auth splits there), no control characters. Trimmed. |
-| `hash` | `SUDARE_HASH` | string | — | `password_hash()` output (bcrypt or argon2), or a bcrypt hash with the `$2a$`/`$2b$`/`$2x$` prefix (python-bcrypt, htpasswd; `password_verify()` takes them, `password_get_info()` does not — round 2m). Checked by syntax only, never by verifying: every bcrypt prefix (`$2a$`/`$2b$`/`$2x$`/`$2y$`) must have the full 60-character shape with cost 04–31 and the bcrypt alphabet, an Argon2 hash its well-formed encoded form (and a PHP that knows Argon2). `password_get_info()` looks only at prefix and length, so a damaged `$2y$` hash would pass it. A damaged hash is `broken` (reason `hash`, or `token` for the token), never `on`. Never a bare prefix test. Trimmed (a pasted trailing newline is the same hash). Never a plain password. Must not contain `ERSETZEN`/`REPLACE` (the templates' example). |
+| `hash` | `SUDARE_HASH` | string | — | `password_hash()` output (bcrypt or argon2), or a bcrypt hash with the `$2a$`/`$2b$`/`$2x$` prefix (python-bcrypt, htpasswd; `password_verify()` takes them, `password_get_info()` does not). Checked by syntax only, never by verifying: every bcrypt prefix (`$2a$`/`$2b$`/`$2x$`/`$2y$`) must have the full 60-character shape with cost 04–31 and the bcrypt alphabet, an Argon2 hash its well-formed encoded form (and a PHP that knows Argon2). `password_get_info()` looks only at prefix and length, so a damaged `$2y$` hash would pass it. A damaged hash is `broken` (reason `hash`, or `token` for the token), never `on`. Never a bare prefix test. Trimmed (a pasted trailing newline is the same hash). Never a plain password. Must not contain `ERSETZEN`/`REPLACE` (the templates' example). |
 | `realm` | `SUDARE_REALM` | string | translated `realm` (`Preview` / `Vorschau`) | Text in the browser dialog. Sanitised at output (§7.3). |
 | `token` | `SUDARE_TOKEN` | string | `null` | **Hash** of a machine token (`password_hash()` of the random token). Requests with header `X-Sudare-Token: <plain token>` pass without Basic Auth (CI smoke tests, uptime checks). |
-| `exempt` | `SUDARE_EXEMPT` | list of entries | `[]` | `[METHOD ]/path[/*]` (`Config::exemptEntry()`): `/p` matches the normalised path `p` only, `/p/*` also below it, a method only that method (GET includes HEAD). Exact by default since review 11.10.: an exempt request reaches Kirby, whose error page (with navigation) answers every unrouted sub-path or method. Entries must already be in normal form (only `[A-Za-z0-9._/-]`, no dot/empty segment, ≤ 1 trailing slash; round 2d 11.10.: Kirby drops `name:value` segments — `;` on Windows — from the routed path, so `/lang:de/*` opened `/lang:de/panel`): decoding after the check would turn `/a/%2A` into `/a/*`. Since rounds 2e–2g an entry with a method needs it twice — `Request::routedMethod()` (as Kirby routes it) and `Request::sentMethod()` (REQUEST_METHOD as sent); `HEAD` entries an exact `HEAD`; `OPTIONS` entries are broken. `routedMethod()` = `Request::kirbyMethod()`, a copy of `Kirby\Http\Request::detectRequestMethod()`: override header `strtoupper()`ed without trim, only Kirby's 9 methods, unknown → GET (RequestTest checks it against Kirby itself). Entry methods outside those 9 → broken. `/`, `/*`, a `*` elsewhere → broken. `/.well-known/acme-challenge` is always exempt. |
+| `exempt` | `SUDARE_EXEMPT` | list of entries | `[]` | `[METHOD ]/path[/*]` (`Config::exemptEntry()`): `/p` matches the normalised path `p` only, `/p/*` also below it, a method only that method (GET includes HEAD). Exact by default: an exempt request reaches Kirby, whose error page (with navigation) answers every unrouted sub-path or method. Entries must already be in normal form (only `[A-Za-z0-9._/-]`, no dot/empty segment, ≤ 1 trailing slash; Kirby drops `name:value` segments — `;` on Windows — from the routed path, so `/lang:de/*` opened `/lang:de/panel`): decoding after the check would turn `/a/%2A` into `/a/*`. An entry with a method needs it twice — `Request::routedMethod()` (as Kirby routes it) and `Request::sentMethod()` (REQUEST_METHOD as sent); `HEAD` entries an exact `HEAD`; `OPTIONS` entries are broken. `routedMethod()` = `Request::kirbyMethod()`, a copy of `Kirby\Http\Request::detectRequestMethod()`: override header `strtoupper()`ed without trim, only Kirby's 9 methods, unknown → GET (RequestTest checks it against Kirby itself). Entry methods outside those 9 → broken. `/`, `/*`, a `*` elsewhere → broken. `/.well-known/acme-challenge` is always exempt. |
 | `language` | `SUDARE_LANGUAGE` | `en`\|`de` | `en`; **`de` when the source is the legacy file** | Language of the 401 page, the 503 text, the default realm. |
-| `theme` | — | array | `Config::DEFAULT_THEME` | Colours of the 401 page: `chrome` (browser `theme-color`), `paper` (background), `ink` (body text), `deep` (heading), `text` (paragraph). Each `#rgb`, `#rrggbb` or `#rrggbbaa`; missing keys keep the default. (an improvement from a client site — a site computes the array itself in `sudare.php`.) |
+| `theme` | — | array | `Config::DEFAULT_THEME` | Colours of the 401 page: `chrome` (browser `theme-color`), `paper` (background), `ink` (body text), `deep` (heading), `text` (paragraph). Each `#rgb`, `#rrggbb` or `#rrggbbaa`; missing keys keep the default. (A site computes the array itself in `sudare.php`.) |
 | `media` | `SUDARE_MEDIA` | bool | `true` | Serve `public/media/**` through PHP (§8). `false`: leave every media request to Kirby. |
 | `assets` | `SUDARE_ASSETS` | bool | `true` | Serve `public/assets/**` through PHP when the request reaches PHP (§8). |
 
@@ -436,8 +422,8 @@ return [
 ];
 ```
 
-`examples/credentials.php`: the legacy format as in
-`kirby-starter/site/config/credentials.example.php`, with an English header
+`examples/credentials.php`: the legacy format as in the template
+`site/config/credentials.example.php`, with an English header
 comment saying "still read; migrate with `sudare-hash`".
 
 ---
@@ -530,7 +516,7 @@ else: no output, no exit, no status change.
 | 1 | state `none` or `off` | `Response::pass([])` |
 | 2 | `isCanonical()` AND `Config::startsWithSegment(path, Config::ACME)` | `Response::pass(headers())` — even while broken: certificate renewal must not depend on the config. `Media::respond()` then answers it (file or 404, §8.2); Kirby never sees it |
 | 3 | state `broken` | `Response::text(503, Page::unavailable($config), headers() + ['Retry-After' => '300'])` |
-| 4 | `isCanonical()` AND `$config->isExempt(path, routedMethod(), sentMethod())` | `Response::pass(headers())` — an entry with a method needs it as routed AND as sent; a HEAD entry an exact `HEAD` (rounds 2e–2g) |
+| 4 | `isCanonical()` AND `$config->isExempt(path, routedMethod(), sentMethod())` | `Response::pass(headers())` — an entry with a method needs it as routed AND as sent; a HEAD entry an exact `HEAD` |
 | 5 | method `OPTIONS` | `Response::empty(204, headers() + ['Allow' => Guard::ALLOW])` — no authentication needed, nothing is revealed |
 | 6 | `token()` given AND `$config->hasToken()` AND `password_verify(token, $config->token())` | `Response::pass(headers())` |
 | 7 | `credentials()` given AND `sameUser($config->user(), user)` AND `password_verify(password, $config->hash())` | `Response::pass(headers())` |
@@ -563,7 +549,7 @@ Notes:
 
 ### 7.1 `Page::denied(Config)` — 401 HTML
 
-Structure (port of the starter's page + a client site's viewport/theme-color):
+Structure (port of the original preview page, plus viewport and theme-color meta tags):
 
 ```html
 <!doctype html><html lang="{language}"><head><meta charset="utf-8">
@@ -686,7 +672,7 @@ Options: `--user=NAME` (default `preview`), `--realm=TEXT`, `--legacy`
 2. Empty → `cli.hash.empty`, exit 1. `mb_strlen < 8` → `cli.hash.short`
    (`{min}`), exit 1. More than 72 bytes or a NUL byte → `cli.hash.long`
    (`{max}`), exit 1 — bcrypt ignores the rest, and `password_hash()` throws
-   on NUL. `--cost=N` (4–31, default `Cli::DEFAULT_COST` = 10; round 2k:
+   on NUL. `--cost=N` (4–31, default `Cli::DEFAULT_COST` = 10;
    PHP's own default of 12 since 8.4 costs ~250 ms per authenticated file
    request), anything else → usage, exit 3.
 3. `$hash = password_hash($password, PASSWORD_BCRYPT, ['cost' => $cost])`
@@ -796,7 +782,7 @@ immutability (original unchanged after `with*`).
 
 ### 10.2 `tests/ConfigTest.php` (config)
 
-Port every case of `VorschauschutzTest.php` + `ZugangsdatenTest.php` at the
+Port every case of the original guard and deploy-gate tests at the
 Config level, and more:
 
 - `load()` on an empty root → `none`, `source() === null`, `protects() === false`, `enabled() === false`.
@@ -869,9 +855,9 @@ heading and text in both languages; does not contain the realm, the user,
 `<` — not possible via I18n, so test escaping through `realmHeader` and by
 asserting the fixed texts contain no raw `&`-breaking characters). `unavailable()`
 = translated sentence + `"\n"`, both languages. `realmHeader()`: plain;
-quotes/backslashes/CR/LF removed; empty → `Preview`; UTF-8 kept (`Vorschau — Praxis`).
+quotes/backslashes/CR/LF removed; empty → `Preview`; UTF-8 kept (`Vorschau — Demo`).
 
-### 10.5 `tests/MediaTest.php` (media) — port of `PanelMedienTest.php` + assets
+### 10.5 `tests/MediaTest.php` (media) — port of the original media tests + assets
 
 Root via `sudare_tmp()`; `$public = $root . '/public'`. Write files, call
 `Media::resolve()` and `Media::respond()` (with `Request::fromServer(['REQUEST_URI' => …])`
@@ -1053,42 +1039,13 @@ Stop the server in a `finally`.
 
 ### 11.1 `README.md` (English) — sections in this order
 
-Title + one-paragraph meaning of the name; feature list (Basic Auth before
-Kirby, noindex everywhere, media/assets through PHP, fail closed, machine
-token, exemptions, hash + check CLIs, `Sudare::active()` contract, EN/DE,
-no cookies/storage/third parties); Requirements (PHP 8.2–8.4, any Kirby —
-Kirby is not required at all); Installation (`composer require
-sayamaapps/kirby-sudare`, vcs repository until Packagist, **type library:
-lands in `vendor/`, not `site/plugins/`**); **Setup** (1. `public/index.php`
-— the `examples/index.php` block with `require vendor/autoload.php` first,
-then `Sudare\Sudare::guard($base)`, then Kirby; 2. `.htaccess` — the
-`media/` rewrite exists in the starter, add the `assets/` line to protect
-assets, keep `CGIPassAuth On` + `SetEnvIf Authorization`; 3. create the
-config with `vendor/bin/sudare-hash`; 4. deploy: secret `SUDARE_PHP` →
-`site/config/sudare.php`, `vendor/bin/sudare-check` as a gate before upload,
-`--allow-off` on the public deploy; 5. smoke test with `PREVIEW_USERNAME`/
-`PREVIEW_PASSWORD` or the token header); Configuration (table §4.3,
-spellings, env, states §4.2, reason codes); **Migration from
-`vorschauschutz.php`** (the legacy file keeps working as is; what to delete
-from the site: `site/config/vorschauschutz.php`, `scripts/hash-erzeugen.php`,
-`scripts/pruefe-zugangsdaten.php`, the two tests; replace `vorschauAktiv()` /
-`site()->vorschau()` with `Sudare::active()`; a client site's
-`kizami.previewAccess` can read `Sudare::config()?->user()` — hash stays
-private, so it keeps reading the file itself); Behaviour (decision table §6.2
-in prose, headers §6.1/§8.3, HEAD/OPTIONS, no redirects); Media and assets
-(§8 allowlists, why uploads never serve scripts); Machine token; Exemptions;
-The 401 page and `theme`; Translations (`Sudare::translations()` for a site
-plugin); Local development (nothing happens without a config; `php -S`
-router note from a client site's index.php); Tests (`composer test`); Security
-notes (bcrypt via `password_hash`, constant-time user compare, fail closed,
-no secrets in output, Basic Auth needs HTTPS — the token too); Privacy link;
-Changelog link; License.
+Title + one-paragraph meaning of the name and what the package does; **Features** (Basic Auth before Kirby, noindex everywhere, media and assets through PHP, fail closed, machine token, exempt paths, hash and check CLIs, EN/DE, no cookies, storage or third parties); **Requirements** (PHP 8.2–8.4 with mbstring, Kirby on the site but not required by the package, host root only); **Installation** (`composer require sayamaapps/kirby-sudare`, vcs repository until Packagist, **type library: lands in `vendor/`, not `site/plugins/`**); **Setup** (1. `public/index.php` — the `examples/index.php` block with `require vendor/autoload.php` first, then `Sudare\Sudare::guard($base)`, then Kirby; 2. `.htaccess` — the `media/` and `assets/` rewrites, keep `CGIPassAuth On` + `SetEnvIf Authorization`; 3. config with `vendor/bin/sudare-hash`, kept out of Git; 4. deploy: secret `SUDARE_PHP` → `site/config/sudare.php`, `vendor/bin/sudare-check` as a gate before upload, `--allow-off` on the public deploy, and a media file requested without credentials must answer 401); **Usage** (check order, states §4.2, HTTPS, media and assets (§8 allowlists), local development); **Machine token**; **Exempt paths**; **Calls** (`Sudare::guard()`, `active()`, `protects()`, `config()`, `translations()`, `sudare_option()`); **Translations**; **Options** (the three sources and their spellings, table §4.3, `theme`, the CSP hash of the 401 page); **Privacy** (no visitor data); **Maintenance** (`composer test`, contributions, security reports through GitHub, CHANGELOG link); **License**.
 
 ### 11.2 `CHANGELOG.md`
 
 CHANGELOG: Keep a Changelog, SemVer, `## [1.0.0] — unreleased`, with the
 project rule "a change to a header or to the default of `active`/`media`/
-`assets` is major" and a **before → now** table like Noren's
+`assets` is major" and a **before → now** table
 (`vorschauschutz($basis)` → `Sudare::guard($base)`, `vorschauMedien()` →
 built in, `vorschauAbweisen()` → `Page::denied()`, `vorschauAktiv()` →
 `Sudare::active()`/`protects()`, `credentials.php` `vorschau.benutzer` → still
@@ -1105,12 +1062,12 @@ No privacy text: Sudare processes no visitor data. The README's Privacy section 
 
 ### 11.3 `examples/index.php`, `examples/htaccess.txt`
 
-`examples/index.php`: the starter's `public/index.php` rewritten for Sudare
-(English comments), including a client site's `cli-server` branch adjusted so
+`examples/index.php`: the default `public/index.php` rewritten for Sudare
+(English comments), including the `cli-server` branch, adjusted so
 `/assets/` is **not** returned to the built-in server when Sudare is meant to
 serve it (comment both options). `examples/htaccess.txt`: only the lines a
 site adds/keeps: `RewriteRule ^media/(.*) index.php [NC,L]`,
-`RewriteRule ^assets/(.*) index.php [NC,L]` (round 2k: without `[NC]` Apache
+`RewriteRule ^assets/(.*) index.php [NC,L]` (without `[NC]` Apache
 on a case-insensitive file system serves `Media/…` past the password),
 `SetEnvIf Authorization "(.+)" HTTP_AUTHORIZATION=$1`, `CGIPassAuth On`,
 `SetEnv ap_trust_cgilike_cl 1`, each with a comment.
@@ -1137,7 +1094,7 @@ fork-PR guard, `.gitignore` with `vendor/`.
 
 ---
 
-## 13. Decisions for Simon
+## 13. Decisions and their reasons
 
 1. **Composer `library`, not a Kirby plugin.** Loaded via `autoload.files`
    (bootstrap.php) — no autoloader magic, same `require_once` style as the
@@ -1147,13 +1104,13 @@ fork-PR guard, `.gitignore` with `vendor/`.
    pages would already be initialised and Panel assets would need Kirby to
    boot for every request.
 2. **Three config sources** (sudare.php, legacy credentials.php, `SUDARE_*`),
-   file first, env laid over per key. The six deployed `CREDENTIALS_PHP`
+   file first, env laid over per key. Existing `CREDENTIALS_PHP`
    secrets keep working unchanged. New sites use `SUDARE_PHP` →
    `site/config/sudare.php`. Env alone also works (hosting panel or Apache `SetEnv`).
 3. **The switch is the presence of a source**, not `active => true`
    (deviation from the family). `active => false` exists for parking a file.
    Danger acknowledged: a typo'd `active` is `broken` (503), never open.
-4. **Legacy file → German texts by default.** All six legacy users are German
+4. **Legacy file → German texts by default.** The legacy files belong to German-language
    sites and would otherwise show an English 401 page the day they switch.
    New-format files default to English like every family member.
 5. **Fail closed includes the example hash and a malformed token.** A
@@ -1161,9 +1118,8 @@ fork-PR guard, `.gitignore` with `vendor/`.
 6. **ACME challenge path passes even while broken.** Certificate renewal
    must not break because a secret was mistyped. Usually the web server
    serves the file before PHP. When it reaches PHP, Sudare answers it itself
-   (the file as text, else an empty 404) — changed in review 11.10.: handing
-   it to Kirby showed the unlaunched site's error page (navigation, footer)
-   to anyone, on every protected site.
+   (the file as text, else an empty 404) — handing it to Kirby would show
+   the unlaunched site's error page (navigation, footer) to anyone.
 7. **OPTIONS answered with 204 without credentials.** Reveals nothing;
    lets preflight-style probes and monitoring work. `Allow` lists the usual
    methods.
@@ -1191,10 +1147,10 @@ fork-PR guard, `.gitignore` with `vendor/`.
     stand-in for Kirby; `KirbyHttpTest` lets a real Kirby answer,
     because the seal has to hold against Kirby's own `Response::send()`.
     Kirby remains a dev dependency (family convention).
-15. **Package does not touch kirby-starter or any site.** The migration
+15. **The package does not touch any site.** The migration of a site
     (index.php, .htaccess assets line, deleting vorschauschutz.php and the two
-    scripts, Annai's noindex hook, a client site's `kizami.previewAccess`) is
-    listed in README → "Migration" for a later rollout.
+    scripts, Annai's noindex hook, a site's `kizami.previewAccess`) is a separate
+    rollout step, not part of the package.
 16. **Secret name `SUDARE_PHP`** recommended for new deploys; the existing
     `CREDENTIALS_PHP` continues to work with the legacy file name.
 17. **The protective headers of a pass are sealed.** Sending them
