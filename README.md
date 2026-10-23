@@ -25,12 +25,6 @@ Sudare puts HTTP Basic Auth in front of a Kirby site, adds `noindex` to its resp
 composer require sayamaapps/kirby-sudare
 ```
 
-Until the package is on Packagist, add the repository to `composer.json` first:
-
-```json
-"repositories": [{ "type": "vcs", "url": "https://github.com/sayamaapps/kirby-sudare" }]
-```
-
 The package is a Composer `library`, not a Kirby plugin. It installs to `vendor/sayamaapps/kirby-sudare/`; deploy `vendor/` as you deploy `kirby/`.
 
 ### Setup
