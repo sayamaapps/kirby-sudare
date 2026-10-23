@@ -1,6 +1,6 @@
 {
     "name": "sayamaapps/kirby-sudare",
-    "description": "Preview protection for Kirby CMS sites before launch: Basic Auth in front of Kirby, noindex on every response, media and assets served through PHP so they are protected too. Runs before Kirby boots.",
+    "description": "Preview protection for Kirby CMS sites before launch: Basic Auth, noindex, protected media and assets.",
     "type": "library",
     "license": "MIT",
     "keywords": [
