@@ -140,7 +140,8 @@ def main() -> int:
     text = os.environ.get("NAMENSWACHE_BEGRIFFE", "")
     if not text.strip():
         print("namenswache-ci: Secret NAMENSWACHE_BEGRIFFE fehlt oder ist leer — "
-              "nichts geprüft, blockiert. Secret NAMENSWACHE_BEGRIFFE im Repo setzen.", file=sys.stderr)
+              "nichts geprüft, blockiert. Secret setzen: scripts/oeffentlich/"
+              "namenswache-ci-ausrollen.sh (im privaten Verwaltungs-Repo).", file=sys.stderr)
         return 2
     try:
         muster = lade_muster(text)
