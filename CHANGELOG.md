@@ -80,13 +80,12 @@ routine update.
 ## [1.0.0] — 2026-10-12
 
 First release as a Composer package. Before 1.0.0 the preview guard lived as a
-copy in each site: `site/config/vorschauschutz.php` (byte-identical in
-kirby-starter and six client sites), a deviating copy in one client site (themed
-401 page, `vorschauAktiv()`), and the scripts `scripts/hash-erzeugen.php` and
-`scripts/pruefe-zugangsdaten.php` of kirby-starter. The changes below are
-measured against kirby-starter's copy.
+copy in each site: `site/config/vorschauschutz.php`, with the scripts
+`scripts/hash-erzeugen.php` and `scripts/pruefe-zugangsdaten.php`. The copies had
+drifted apart (one of them with a themed 401 page and a `vorschauAktiv()` helper).
+The changes below are measured against that copy.
 
-### Fixed — against the copy
+### Fixed — against the copied guard
 
 - A configuration behind a symlink that `open_basedir` does not allow (a shared config of Deployer/Capistrano) counted as absent and opened the site; it is now broken (503). Filesystem checks (configuration and served files) run under the package's own error handler: no `open_basedir` warning reaches the output, and a site's handler that throws on warnings cannot turn one into a 500.
 - A conditional request with the ETag of a compressed answer (`-gzip`/`-br` from mod_deflate/mod_brotli) now gets its 304.
@@ -110,10 +109,10 @@ table below. The legacy `credentials.php` keeps working without changes.
 
 ### Changed behaviour
 
-- **Protective headers on every response** while protected: `X-Robots-Tag: noindex, nofollow, noarchive` and `Cache-Control: private, no-store` (both already sent by the starter's copy), now also on the 503, on OPTIONS and on every page that passes.
+- **Protective headers on every response** while protected: `X-Robots-Tag: noindex, nofollow, noarchive` and `Cache-Control: private, no-store` (both already sent by the copied guard), now also on the 503, on OPTIONS and on every page that passes.
 - **`Vary: Authorization`** is new. It is sent on every protected response, so a shared cache does not hand a page to a visitor who has no password.
 - **HEAD and OPTIONS are handled.** HEAD gets the status and headers of GET without a body. OPTIONS gets `204` with an `Allow` header and needs no credentials.
-- **`media/` and `assets/` through PHP**, protected or not (as the starter did for `media/` only). `assets/` is new as an option; its allowlist is wider than `media/` (code and fonts shipped with the site). Uploads under `media/pages/` still never serve scripts.
+- **`media/` and `assets/` through PHP**, protected or not (as the copied guard did for `media/` only). `assets/` is new as an option; its allowlist is wider than `media/` (code and fonts shipped with the site). Uploads under `media/pages/` still never serve scripts.
 - **Machine token**: `X-Sudare-Token` with a hashed token, checked with `password_verify()`. New.
 - **Exempt paths**: configurable list of `[METHOD ]/path[/*]` entries, exact by default; `/.well-known/acme-challenge` is always exempt, also while the configuration is broken. New. Both count only for the path as sent: `/panel/../api/hook` or `/%61pi/hook` is not exempt, because Kirby would route it to the Panel or the site's error page. Entries contain only letters, digits, `-`, `_`, `.` and `/` (a `:` segment is a Kirby URL parameter: `/lang:de/*` would have opened the Panel). An entry with a method needs it as routed and as sent (no `X-HTTP-Method-Override` either way); `HEAD` entries need an exact `HEAD`; `OPTIONS` entries are refused. An ACME request that reaches PHP is answered by Sudare (the challenge file, or an empty 404), never by Kirby's error page.
 - **Byte ranges** for files under `media/` and `assets/`: `Accept-Ranges: bytes`, `206` for one range, `416` beyond the file, `If-Range` compared with the file's validators. Safari and iOS need it for video and audio. New.
@@ -125,7 +124,7 @@ table below. The legacy `credentials.php` keeps working without changes.
 - **Fail closed** is stricter: a configuration that exists and does not validate is 503. New checks: the example hash from the templates (`ERSETZEN`, `REPLACE`), a malformed token, an `active` value that is not a boolean, a `theme` with a non-hex colour, output printed by the configuration file (captured, never sent), a file that ends the script (`exit`, `die`, a fatal error: 503, and exit 2 in `sudare-check`), and a `site/` or `site/config/` that is a dangling link or not searchable for PHP.
 - **Hashes are verified with `password_get_info()`**, not by a prefix test. Argon2 hashes are accepted.
 - **User names are compared in constant time** (SHA-256 digests), and the password is always verified, also for a wrong user.
-- **Language**: English by default; the legacy file keeps German (`de`) because all six legacy sites are German.
+- **Language**: English by default; the legacy file keeps German (`de`) because the legacy files were written for German sites.
 - **No `Location` header anywhere.** The package never redirects.
 
 ### Unchanged

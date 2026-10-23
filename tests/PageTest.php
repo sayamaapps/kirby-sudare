@@ -66,8 +66,8 @@ holds(!str_contains(Sudare\Page::unavailable($en), '$2y$'), 'unavailable: no has
 /* ------------------------------------------------------------ realmHeader() */
 
 expect('Basic realm="Preview", charset="UTF-8"', Sudare\Page::realmHeader('Preview'), 'realm: plain');
-expect('Basic realm="Preview — Praxis", charset="UTF-8"', Sudare\Page::realmHeader('Preview — Praxis'), 'realm: plain with dash');
-expect('Basic realm="Vorschau — Praxis", charset="UTF-8"', Sudare\Page::realmHeader('Vorschau — Praxis'), 'realm: UTF-8 kept');
+expect('Basic realm="Preview — Demo", charset="UTF-8"', Sudare\Page::realmHeader('Preview — Demo'), 'realm: plain with dash');
+expect('Basic realm="Vorschau — Demo", charset="UTF-8"', Sudare\Page::realmHeader('Vorschau — Demo'), 'realm: UTF-8 kept');
 expect('Basic realm="He said hiback", charset="UTF-8"', Sudare\Page::realmHeader('He said "hi"\\back'), 'realm: quotes and backslash removed');
 expect('Basic realm="ab", charset="UTF-8"', Sudare\Page::realmHeader("a\r\nb"), 'realm: CR and LF removed');
 expect('Basic realm="ab", charset="UTF-8"', Sudare\Page::realmHeader("a\0b"), 'realm: NUL removed');

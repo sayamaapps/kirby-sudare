@@ -156,7 +156,7 @@ foreach (['site/config/sudare.php' => 'file', 'site/config' => 'directory'] as $
     expect(Config::STATE_BROKEN, $state, "open_basedir, $linked as a link to outside: broken, not none");
 }
 
-// Round 2h: the same link in a site/config without read permission (search
+// The same link in a site/config without read permission (search
 // only, 0311): scandir() sees nothing, PHP's open_basedir warning still tells.
 // A missing file there stays "none". Root lists anyway: skipped.
 if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
@@ -181,12 +181,12 @@ if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
     symlink($outside . '/sudare.php', $jail . '/site/config/sudare.php');
     chmod($jail . '/site/config', 0311);
     expect(Config::STATE_BROKEN, $obState($jail), 'open_basedir, link to outside in an unreadable site/config: broken, not none');
-    // Round 2i: a site's error handler set before guard() that swallows
+    // A site's error handler set before guard() that swallows
     // suppressed warnings (returns null) must not hide the open_basedir one.
     expect(Config::STATE_BROKEN, $obState($jail, 'set_error_handler(function ($no) { if (!(error_reporting() & $no)) { return; } throw new ErrorException("x"); });'),
         'open_basedir + unreadable site/config + a foreign error handler: broken');
     expect(Config::STATE_BROKEN, $obState($jail, 'set_error_handler(fn () => true);'), 'open_basedir + unreadable site/config + a handler returning true: broken');
-    // Round 2j: a handler that throws on every warning (Kirby's debug mode,
+    // A handler that throws on every warning (Kirby's debug mode,
     // many apps) must not turn the open_basedir warning of is_file() into an
     // exception — a 500 without protective headers.
     expect(Config::STATE_BROKEN, $obState($jail, 'set_error_handler(function ($no, $message, $file, $line) { throw new ErrorException($message, 0, $no, $file, $line); });'),
@@ -198,7 +198,7 @@ if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
     chmod($jail . '/site/config', 0755);
 }
 
-// Round 2i: opcache.validate_timestamps=0 must not keep a rotated password.
+// opcache.validate_timestamps=0 must not keep a rotated password.
 if (function_exists('opcache_invalidate')) {
     $rot = sudare_tmp();
     $write = static fn (string $user): bool => (bool) file_put_contents($rot . '/site/config/sudare.php', '<?php return ["user" => ' . var_export($user, true) . ', "hash" => ' . var_export($hash, true) . '];');
@@ -215,7 +215,7 @@ if (function_exists('opcache_invalidate')) {
     proc_close($process);
     expect('erster|zweiter', $users, 'opcache without timestamp checks: the rewritten file counts at once');
 
-    // Round 2j: dropping the copy must not waste shared opcache memory while
+    // Dropping the copy must not waste shared opcache memory while
     // the file is unchanged (a forced invalidation marked it stale on every
     // request: ~1 KB each until the cache restarted, for every site of the
     // pool). Each load here is one request: the per-request cache is cleared.
@@ -264,7 +264,7 @@ if (function_exists('posix_geteuid') && posix_geteuid() !== 0) {
     holds(true, 'unreadable file: skipped (running as root)');
 }
 
-// Round 2m: a bcrypt hash with the $2a$/$2b$ prefix (python-bcrypt, htpasswd)
+// A bcrypt hash with the $2a$/$2b$ prefix (python-bcrypt, htpasswd)
 // verifies with password_verify() but is "unknown" to password_get_info();
 // it must count as a hash, not fail closed. A pasted trailing newline too.
 $foreign = crypt('test-password', '$2a$04$abcdefghijklmnopqrstuu');

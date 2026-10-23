@@ -86,7 +86,7 @@ holds(!str_contains($out . $err, $pw), 'hash: the plain password appears in neit
 holds(!isset($config['realm']) && !isset($config['token']), 'hash: no realm or token without the flags');
 holds(str_contains($err, 'Content for the secret SUDARE_PHP'), 'hash: info names the SUDARE_PHP secret');
 
-// Round 2k: bcrypt cost 10 by default (PHP's own default is 12 since 8.4 —
+// Bcrypt cost 10 by default (PHP's own default is 12 since 8.4 —
 // ~250 ms per authenticated file request on a shared host), --cost changes it.
 holds(str_starts_with($config['hash'] ?? '', '$2y$10$'), 'hash: bcrypt with cost 10 by default');
 [$code, $out] = cliHash(['--cost=4'], $pw . "\n");
@@ -256,7 +256,7 @@ expect(Cli::EXIT_OK, cliCheck(['site/config/sudare.php'], [], $valid)[0], 'check
 
 [$code, $out] = cliCheck([$empty], ['GITHUB_ACTIONS' => 'true']);
 holds(str_starts_with($out, '::error::'), 'check: GITHUB_ACTIONS prefixes failing lines');
-// Round 2l: the counted-variables line is information, not the verdict.
+// The counted-variables line is information, not the verdict.
 [$code, $out] = cliCheck([$plain, '--env'], ['SUDARE_REALM' => 'R', 'GITHUB_ACTIONS' => 'true']);
 $outLines = explode("\n", trim($out));
 holds($code === Cli::EXIT_BROKEN && str_starts_with($outLines[0], 'Counted from the environment') && str_starts_with($outLines[1] ?? '', '::error::'),
@@ -306,7 +306,7 @@ expect(2, $code, 'bin/sudare-check: a file that calls exit is broken (exit 2)');
 holds(!str_contains($out . $stderr, 'LEAK'), 'bin/sudare-check: output of an exiting file does not leak');
 holds(str_contains($stderr, 'ends the script'), 'bin/sudare-check: says why');
 
-// Round 2j: under opcache.restrict_api Sudare's opcache_invalidate() is
+// Under opcache.restrict_api Sudare's opcache_invalidate() is
 // refused and an old copy of the file may hold; the check says so and names
 // the blacklist, without failing.
 $withIni = static function (string $root, array $flags): array {
@@ -348,7 +348,7 @@ holds(
 expect(3, $code, 'bin/sudare-hash exits 3 on an unknown option');
 holds(str_contains($stderr, 'Usage: sudare-hash'), 'bin/sudare-hash prints usage on stderr for a usage error');
 
-// Round 2i: at a terminal with shell_exec disabled (shared hosts) sudare-hash
+// At a terminal with shell_exec disabled (shared hosts) sudare-hash
 // warns instead of dying with "Call to undefined function shell_exec()".
 // Needs a pty: BSD script(1) (macOS); elsewhere visibly skipped.
 if (PHP_OS_FAMILY === 'Darwin' && is_executable('/usr/bin/script')) {

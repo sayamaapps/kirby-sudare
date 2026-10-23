@@ -43,7 +43,7 @@ final class Config
     /** Colour roles of the 401 page; every key must be a CSS hex colour. */
     public const THEME_KEYS = ['chrome', 'paper', 'ink', 'deep', 'text'];
 
-    /** The starter's colours (SPEC.md §4.3). */
+    /** The default colours (SPEC.md §4.3). */
     public const DEFAULT_THEME = [
         'chrome' => '#1E3648',
         'paper'  => '#FFFFFF',

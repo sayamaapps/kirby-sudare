@@ -178,7 +178,7 @@ expect(2, $r['exit'], 'exit in the file: the CLI process fails with exit 2');
 holds(!str_contains($r['out'] . $r['err'], 'LEAK'), 'exit in the file: its output is discarded');
 holds(!str_contains($r['out'], 'KIRBY'), 'exit in the file: Kirby is not reached');
 
-// Round 2k: a fatal error the file cannot recover from (memory exhausted) is
+// A fatal error the file cannot recover from (memory exhausted) is
 // printed by PHP itself, past the output buffer, when display_errors is on —
 // with the file's path and a stack trace. Not while Sudare reads the file.
 $exhausts = sudare_tmp();
