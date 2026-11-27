@@ -28,7 +28,7 @@
         "ext-mbstring": "*"
     },
     "require-dev": {
-        "getkirby/cms": "^5.0"
+        "getkirby/cms": "^5.0 || ^6.0"
     },
     "autoload": {
         "files": [
@@ -54,7 +54,7 @@
     "extra": {
         "kirby-cms-path": false,
         "kirby": {
-            "compatible": "^5.0"
+            "compatible": "^5.0 || ^6.0"
         }
     }
 }

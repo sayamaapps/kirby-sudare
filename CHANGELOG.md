@@ -11,6 +11,16 @@ All notable changes to this project are documented here. Versions follow
 
 ## [Unreleased]
 
+### Added
+
+- Kirby 6 is supported next to Kirby 5 (`getkirby/cms` `^5.0 || ^6.0`). Kirby 6 itself
+  needs PHP 8.3 or newer; the plugin still runs on PHP 8.2 with Kirby 5.
+- SPEC and tests describe the plugin scripts and stylesheets of Kirby 6
+  (`media/plugins/{vendor}/{name}.{hash}.js|css`): Kirby serves them through a
+  route from the plugin folder, so there is no file below `public/media` and
+  Sudare leaves the request to Kirby, after the same password check. The code of
+  Sudare is unchanged.
+
 ### Removed
 
 - **`DATENSCHUTZ.md` and `PRIVACY.md`.** Sudare processes no visitor data, so it has no place in a site's privacy policy. The README says so under "Privacy".
