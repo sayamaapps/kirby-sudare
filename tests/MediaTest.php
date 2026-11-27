@@ -59,6 +59,9 @@ check('media/panel/abc/style.min.css', null, 'text/css', $none, 'panel css');
 check('media/panel/abc/font.woff2', null, 'font/woff2', $none, 'panel woff2');
 check('media/panel/abc/favicon.ico', null, 'image/x-icon', $none, 'panel ico');
 check('media/plugins/index.js', null, 'text/javascript', $none, 'plugins js');
+// Kirby 6: one file per plugin, below its vendor folder, with a hash in the name.
+check('media/plugins/example/muster.1a2b3c4d.js', null, 'text/javascript', $on, 'plugins js, Kirby 6 path');
+check('media/plugins/example/muster.1a2b3c4d.css', null, 'text/css', $on, 'plugins css, Kirby 6 path');
 check('media/panel/abc/evil.php', null, null, $none, 'panel php');
 check('media/panel/abc/skript.phtml', null, null, $none, 'panel phtml');
 check('media/panel/abc/noext', null, null, $none, 'panel file without extension');
