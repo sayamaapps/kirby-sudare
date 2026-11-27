@@ -9,7 +9,7 @@ All notable changes to this project are documented here. Versions follow
 - **A change to the status codes** of the decision table (401, 503, 204, 200)
   or to the allowlists of `Media` is a **major** version as well.
 
-## [Unreleased]
+## [2.2.0] — 2026-11-27
 
 ### Added
 
