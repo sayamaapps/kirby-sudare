@@ -870,7 +870,7 @@ and `$on`/`Config::none()`):
 | `media/panel/abc/font.woff2` | same | yes, `font/woff2` |
 | `media/panel/abc/favicon.ico` | same | yes |
 | `media/plugins/index.js` (Kirby 5) | same | yes |
-| `media/plugins/{vendor}/{name}.{hash}.js` / `.css` (Kirby 6) | same | yes, `text/javascript` / `text/css` |
+| `media/plugins/{vendor}/{name}.{hash}.js` / `.css` (Kirby 6: served by a Kirby route from the plugin folder, nothing is stored) | `/media/plugins/{vendor}/{name}.{hash}.js` / `.css` | no: `null`, Kirby answers |
 | `media/panel/abc/evil.php` / `.phtml` / `noext` | same | no |
 | `media/pages/p/upload.js` / `.json` / `.css` | same | no |
 | `media/pages/p/detour.js` | `/media/panel/abc/../../pages/p/detour.js` | no |

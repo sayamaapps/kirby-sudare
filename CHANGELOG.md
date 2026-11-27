@@ -15,12 +15,11 @@ All notable changes to this project are documented here. Versions follow
 
 - Kirby 6 is supported next to Kirby 5 (`getkirby/cms` `^5.0 || ^6.0`). Kirby 6 itself
   needs PHP 8.3 or newer; the plugin still runs on PHP 8.2 with Kirby 5.
-
-### Fixed
-
-- SPEC and tests cover the plugin asset path of Kirby 6,
-  `media/plugins/{vendor}/{name}.{hash}.js|css`. Sudare already served it; the
-  code is unchanged.
+- SPEC and tests describe the plugin scripts and stylesheets of Kirby 6
+  (`media/plugins/{vendor}/{name}.{hash}.js|css`): Kirby serves them through a
+  route from the plugin folder, so there is no file below `public/media` and
+  Sudare leaves the request to Kirby, after the same password check. The code of
+  Sudare is unchanged.
 
 ### Removed
 
